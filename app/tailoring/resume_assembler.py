@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.bank_generator.schemas import ExperienceBankIndex, ProjectEntry, WorkExperienceEntry
 from app.schemas import JDAnalysis
+from app.tailoring.skill_categorizer import SkillCategory, categorize_skills, render_skills_latex
 
 
 @dataclass(frozen=True)
@@ -141,17 +142,20 @@ def _render_projects_macros(
     return "\n".join(lines).strip() + "\n"
 
 
-def _render_skills_block(*, skills: list[str]) -> str:
-    skills = [s for s in skills if s and s.strip()]
-    joined = ", ".join(skills[:40])
-    return (
-        "\\section{SKILLS}\n"
-        "\\begin{itemize}[leftmargin=0in, label={}]\n"
-        "\\small{\\item{\n"
-        f"\\textbf{{Relevant:}} {{{_sanitize_inline_latex(joined)}}} \\\\\n"
-        "}}\n"
-        "\\end{itemize}\n"
-    )
+def _build_skills(
+    *,
+    bank_index: ExperienceBankIndex,
+    used_evidence_ids: list[str],
+    jd: JDAnalysis,
+) -> tuple[str, list[SkillCategory]]:
+    """
+    Build a recruiter-friendly SKILLS section by categorizing evidence-supported skills.
+    """
+    categories = categorize_skills(capabilities=bank_index.capabilities, used_evidence_ids=used_evidence_ids, jd=jd)
+    if not categories:
+        # Non-empty section is required; keep deterministic placeholder.
+        return "\\section{SKILLS}\n\\small{Unclear from resume.}\n", []
+    return render_skills_latex(categories), categories
 
 
 def _ensure_document_wrapped(preamble: str) -> tuple[str, str]:
@@ -327,14 +331,7 @@ def assemble_from_bank(
         used_evidence_ids.extend([eid for eid in p.evidence_ids if eid in verified_ids])
     used_evidence_ids = list(dict.fromkeys(used_evidence_ids))
 
-    # Skills from used evidence: keep only capabilities explicitly supported by evidence IDs.
-    skills_supported: list[str] = []
-    for cap in bank_index.capabilities:
-        if any(eid in used_evidence_ids for eid in cap.evidence_ids):
-            skills_supported.append(cap.name)
-    # Prioritize JD relevance
-    jd_terms = {t.casefold() for t in (jd.required_skills + jd.important_keywords + jd.preferred_skills)}
-    skills_supported.sort(key=lambda s: (s.casefold() in jd_terms, s.casefold()), reverse=True)
+    skills_block, skill_categories = _build_skills(bank_index=bank_index, used_evidence_ids=used_evidence_ids, jd=jd)
 
     # Build LaTeX with deterministic section order:
     # HEADER (unchanged) -> SUMMARY -> EXPERIENCE -> PROJECTS -> SKILLS -> EDUCATION (unchanged)
@@ -379,7 +376,7 @@ def assemble_from_bank(
             out.append("  \\end{itemize}")
         out.append("\\end{itemize}\n")
 
-    out.append(_render_skills_block(skills=skills_supported))
+    out.append(skills_block)
     out.append(education_block.strip() + "\n")
 
     out.append("\\end{document}\n")
@@ -390,14 +387,17 @@ def assemble_from_bank(
         "summary": [summary_block.strip().replace("\\section{SUMMARY}", "").strip()[:400]] if summary_block else [],
         "experience": [claim_by_id[eid].claim_text for eid in used_evidence_ids if eid in claim_by_id][:20],
         "projects": [],
-        "skills": skills_supported[:40],
+        "skills": [],
         "education": [],
     }
+    md_skills_lines: list[str] = []
+    for cat in skill_categories:
+        md_skills_lines.append(f"- **{cat.name}:** " + ", ".join([s.name for s in cat.skills]))
     md = (
         "## SUMMARY\n" + ("\n".join(f"- {x}" for x in md_sections["summary"]) + "\n\n" if md_sections["summary"] else "\n")
         + "## EXPERIENCE\n" + "\n".join(f"- {x}" for x in md_sections["experience"]) + "\n\n"
         + "## PROJECTS\n" + "\n".join(f"- {p.name}" for p in proj_entries) + "\n\n"
-        + "## SKILLS\n" + "\n".join(f"- {s}" for s in md_sections["skills"]) + "\n"
+        + "## SKILLS\n" + ("\n".join(md_skills_lines) if md_skills_lines else "- Unclear from resume.") + "\n"
         + "## EDUCATION\n" + (education_block.strip()[:400] if education_block else "") + "\n"
     )
     txt = _render_text(
@@ -405,7 +405,7 @@ def assemble_from_bank(
             "summary": md_sections["summary"],
             "experience": md_sections["experience"],
             "projects": [p.name for p in proj_entries],
-            "capabilities": md_sections["skills"],
+            "capabilities": [f"{cat.name}: " + ", ".join([s.name for s in cat.skills]) for cat in skill_categories],
         }
     )
 

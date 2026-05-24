@@ -192,10 +192,11 @@ The bank generator behaves like an evidence-grounded knowledge-base builder (not
 
 ### Tailored resume output structure (deterministic)
 The KB-based assembler enforces a fixed, recruiter/ATS-stable LaTeX layout:
-`HEADER (unchanged from bank template) → EXPERIENCE → PROJECTS → SKILLS → EDUCATION (unchanged snapshot)`
+`HEADER (unchanged from bank template) → SUMMARY → EXPERIENCE → PROJECTS → SKILLS → EDUCATION (unchanged snapshot)`
 
 Implementation:
 - `app/tailoring/resume_assembler.py`
+- `app/tailoring/skill_categorizer.py` (semantic skill grouping + recruiter-friendly category labels)
 
 How “unchanged” works:
 - The bank stores a template snapshot derived from the uploaded master resume:
