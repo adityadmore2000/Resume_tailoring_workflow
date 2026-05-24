@@ -27,6 +27,8 @@ st.sidebar.caption("If you see “model not found”, run `ollama list` and `oll
 _PAGES_DIR = Path(__file__).resolve().parent / "ui" / "pages"
 _CREATE = _PAGES_DIR / "1_create_experience_bank.py"
 _TAILOR = _PAGES_DIR / "2_tailor_resume.py"
+_PREVIEW = _PAGES_DIR / "3_preview_experience_bank.py"
+_LATEX_WS = _PAGES_DIR / "4_resume_latex_preview.py"
 if not _CREATE.exists() or not _TAILOR.exists():
     st.error("UI pages not found. Expected files under `app/ui/pages/`.")
     st.code(str(_CREATE))
@@ -35,7 +37,8 @@ if not _CREATE.exists() or not _TAILOR.exists():
 
 create_bank = st.Page(str(_CREATE), title="Create Experience Bank", icon="🧱")
 tailor = st.Page(str(_TAILOR), title="Tailor Resume", icon="✍️")
-preview = st.Page(str(_PAGES_DIR / "3_preview_experience_bank.py"), title="Preview Experience Bank", icon="🔎")
+preview = st.Page(str(_PREVIEW), title="Preview Experience Bank", icon="🔎")
+latex_ws = st.Page(str(_LATEX_WS), title="Resume LaTeX Preview", icon="🧾")
 
-nav = st.navigation([create_bank, tailor, preview])
+nav = st.navigation([create_bank, tailor, preview, latex_ws])
 nav.run()

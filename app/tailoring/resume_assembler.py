@@ -103,14 +103,13 @@ def _render_experience_macros(
         lines.append(r"\resumeSubheading")
         lines.append(f"{{{_sanitize_inline_latex(display_title)}}}{{{_sanitize_inline_latex(date_range)}}}")
         lines.append(f"{{{_sanitize_inline_latex(subtitle)}}}{{{_sanitize_inline_latex(w.location or '')}}}")
-        lines.append(r"\resumeItemListStart")
-        bullets = bullet_ids_by_entry_id.get(w.entry_id, [])
-        for eid in bullets[:max_bullets_per_entry]:
-            body = _sanitize_inline_latex(evidence_latex_by_id.get(eid, ""))
-            if not body:
-                continue
-            lines.append(rf"\resumeItem{{{body}}}")
-        lines.append(r"\resumeItemListEnd")
+        lines.extend(
+            _render_item_list(
+                evidence_ids=bullet_ids_by_entry_id.get(w.entry_id, [])[:max_bullets_per_entry],
+                evidence_latex_by_id=evidence_latex_by_id,
+                empty_fallback=None,
+            )
+        )
     lines.append(r"\resumeSubHeadingListEnd")
     return "\n".join(lines).strip() + "\n"
 
@@ -130,16 +129,39 @@ def _render_projects_macros(
         right = ""
         lines.append(r"\resumeProjectHeading")
         lines.append(f"{{{left}}}{{{right}}}")
-        lines.append(r"\resumeItemListStart")
-        bullets = [eid for eid in p.evidence_ids if eid in verified_ids]
-        for eid in bullets[:max_bullets_per_project]:
-            body = _sanitize_inline_latex(evidence_latex_by_id.get(eid, ""))
-            if not body:
-                continue
-            lines.append(rf"\resumeItem{{{body}}}")
-        lines.append(r"\resumeItemListEnd")
+        bullets = [eid for eid in p.evidence_ids if eid in verified_ids][:max_bullets_per_project]
+        lines.extend(
+            _render_item_list(
+                evidence_ids=bullets,
+                evidence_latex_by_id=evidence_latex_by_id,
+                empty_fallback=None,
+            )
+        )
     lines.append(r"\resumeSubHeadingListEnd")
     return "\n".join(lines).strip() + "\n"
+
+
+def _render_item_list(
+    *,
+    evidence_ids: list[str],
+    evidence_latex_by_id: dict[str, str],
+    empty_fallback: str | None,
+) -> list[str]:
+    """
+    Always emits both start/end wrappers for resume item lists.
+    """
+    lines: list[str] = [r"\resumeItemListStart"]
+    count = 0
+    for eid in evidence_ids:
+        body = _sanitize_inline_latex(evidence_latex_by_id.get(eid, ""))
+        if not body:
+            continue
+        lines.append(rf"\resumeItem{{{body}}}")
+        count += 1
+    if count == 0 and empty_fallback:
+        lines.append(rf"\resumeItem{{{_sanitize_inline_latex(empty_fallback)}}}")
+    lines.append(r"\resumeItemListEnd")
+    return lines
 
 
 def _build_skills(

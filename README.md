@@ -71,6 +71,24 @@ Workflow:
 1. Create an `EXPERIENCE_BANK` from a master resume (upload once)
 2. Tailor a resume by selecting a bank + providing a JD (no resume upload during tailoring)
 
+## LaTeX editor + PDF preview (generated resumes)
+After tailoring, the UI creates an editable workspace:
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/resume.tex`
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/resume.pdf`
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/tailored_resume.md`
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/tailored_resume.txt`
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/traceability.json`
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/compile.log`
+
+If compilation fails, the UI shows the compile log and keeps the last successful PDF (if any).
+
+### LaTeX compiler prerequisite
+For PDF preview/export you need one of:
+- `latexmk` (preferred)
+- `pdflatex` (fallback)
+
+If neither is installed, the system still generates LaTeX, but PDF preview/export will show: “LaTeX compiler not found”.
+
 ## Experience banks (optional)
 Generate an evidence-grounded knowledge base from a master resume (stored per bank folder):
 - Source upload snapshot: `data/uploads/<bank>/resume.tex`
