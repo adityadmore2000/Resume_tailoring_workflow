@@ -11,11 +11,19 @@ build/
 
 # Streamlit
 .streamlit/
+.env
 
 # Outputs
 outputs/*
 !outputs/.gitkeep
 
+# Experience banks (keep registry)
+data/uploads/
+data/vector_store/
+data/experience_bank/*
+!data/experience_bank/banks_registry.json
+
 # OS
 .DS_Store
-
+generated_resumes
+.env.example

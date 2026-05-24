@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from app.llm import OllamaClient, normalize_keyword_list, redact_large_text
+from app.llm import LLMProvider, normalize_keyword_list, redact_large_text
 from app.prompts import JD_ANALYZER_PROMPT, SYSTEM_GUARDRAILS
 from app.schemas import JDAnalysis
 
 
-def analyze_jd(jd_text: str, llm: OllamaClient) -> JDAnalysis:
+def analyze_jd(jd_text: str, llm: LLMProvider) -> JDAnalysis:
     user = (
         JD_ANALYZER_PROMPT
         + "\n\nJOB DESCRIPTION:\n"

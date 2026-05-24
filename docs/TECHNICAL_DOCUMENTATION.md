@@ -6,11 +6,10 @@ This document explains how the codebase works, the data contracts, and how to ex
 ```
 app/
   main.py                 # CLI entrypoint
-  ui.py                   # Streamlit human review UI
+  ui.py                   # Streamlit multi-page UI (bank → tailor → preview)
   config.py               # Safety + model config
   schemas.py              # Pydantic contracts
-  prompts.py              # Prompt templates (per stage)
-  llm.py                  # Ollama client + JSON extraction
+  prompts.py              # Back-compat shim for prompts
   parser.py               # LaTeX → structured JSON + spans
   jd_analyzer.py          # JD → JDAnalysis (LLM)
   evidence_mapper.py      # Requirements → evidence in resume (deterministic)
@@ -20,6 +19,43 @@ app/
   latex_rebuilder.py      # Surgical LaTeX replacements
   evaluator.py            # Recruiter-style evaluation (LLM)
   pipeline.py             # Orchestrates the stages
+  normalizers.py          # Schema-specific output normalization (pre-validation)
+
+  llm/
+    local_llm.py           # Provider abstraction (Ollama/OpenAI/OpenAI-compatible) + JSON repair/retry/normalization
+    prompts.py             # Schema-explicit prompts per stage
+
+  resume_parser/
+    latex_parser.py        # Wrapper for LaTeX parsing (bank generation)
+    text_parser.py         # Placeholder for plain-text resumes
+    section_detector.py    # Dynamic section detection (heuristic MVP)
+    section_mapper.py      # Canonical section mapping
+
+  bank_generator/
+    schemas.py             # Experience bank JSON schemas
+    folder_manager.py      # bank_folder_name validation + safe paths
+    bank_registry.py       # banks_registry.json management
+    evidence_extractor.py  # Atomic evidence claim extraction
+    capability_mapper.py   # Capability extraction/linking
+    validator.py           # Bank validation rules
+    markdown_writer.py     # Markdown generation from validated JSON
+    bank_builder.py        # End-to-end resume → bank → vector store
+
+  rag/
+    chunker.py             # Chunk markdown for retrieval
+    ingest.py              # Build per-bank vector store (JSONL)
+    retriever.py           # Hybrid retrieval (semantic if available + keywords)
+
+  tailoring/
+    jd_parser.py           # Wrapper around JD analysis
+    resume_assembler.py    # Deterministic LaTeX assembly from bank evidence
+    hallucination_guard.py # Extra guard helpers
+    skill_categorizer.py   # Evidence-grounded skill grouping + category labels
+
+  generated_resumes/
+    resume_store.py        # Stores per-resume artifacts under data/generated_resumes/...
+    latex_structure.py     # LaTeX list/macro structure validation + safe auto-fix
+    latex_compiler.py      # latexmk/pdflatex wrapper with timeouts + preflight
 
 docs/
   SYSTEM_DESIGN.md
@@ -36,6 +72,19 @@ examples/
 
 outputs/
   (generated files)
+
+data/
+  uploads/
+  experience_bank/
+    banks_registry.json
+  vector_store/
+  generated_resumes/
+
+scripts/
+  generate_experience_bank.py
+  ingest_experience_bank.py
+  list_experience_banks.py
+  tailor_resume.py
 ```
 
 ## Data models / schemas
@@ -53,14 +102,19 @@ These schemas act as **contracts** between modules, making the pipeline more tes
 
 ## Inputs and outputs
 Inputs:
-- JD text (string)
-- Resume LaTeX (string)
+- Phase 1 (bank creation): master resume (LaTeX/text)
+- Phase 2 (tailoring): selected bank + JD text
 
 Outputs:
-- Tailored LaTeX (string) — produced by applying only user-approved suggestions
-- Change report (JSON) — suggestions, reasons, flags
-- Evaluation report (JSON) — recruiter-style decision
-- Artifacts (JSON) — JD analysis, evidence map, rewrite plan
+- Tailored LaTeX/Markdown/Text (strings)
+- Evidence map (JSON) for verification
+- Generated resume workspace artifacts under `data/generated_resumes/<bank>/<resume_id>/...`
+
+Experience bank outputs (optional, for bank-driven workflows):
+- `data/uploads/<bank>/resume.tex` (source snapshot)
+- `data/experience_bank/<bank>/...` (validated markdown + JSON index)
+- `data/vector_store/<bank>/index.jsonl` (per-bank retrieval index)
+- Registry entry in `data/experience_bank/banks_registry.json`
 
 ## CLI usage
 Run:
@@ -97,37 +151,114 @@ Run:
 - `streamlit run app/ui.py`
 
 UI workflow:
-1. Paste/upload JD and resume
-2. Run pipeline
-3. Inspect artifacts (JD analysis + evidence map)
-4. Review each suggestion:
-   - original vs suggested
-   - reason
-   - validation flags
-   - verifier rejection status
-5. Approve individual changes
-6. Generate final LaTeX only from approvals
-7. Download tailored `.tex` and JSON reports
+This UI is organized around the two-phase product flow:
+
+1. **Create Experience Bank**
+   - Upload a master resume (.tex / .txt)
+   - Provide `bank_folder_name` (slugified + validated)
+   - Generate KB + vector store + registry entry
+
+2. **Tailor Resume**
+   - Select an existing `bank_folder_name`
+   - Paste/upload JD
+   - Retrieve + verify evidence from the bank
+   - Assemble a tailored resume (LaTeX/Markdown/Text)
+   - Persist artifacts under `data/generated_resumes/<bank>/<resume_id>/...`
+   - Auto-navigate into the Resume Preview workspace
+
+Important: **Tailoring does not accept a resume input.**
 
 State management:
-- `st.session_state` stores `pipeline_result`, `parsed_resume`, and the generated `final_tex`.
-- Approvals are tracked per bullet ID using checkbox keys.
+- `st.session_state` stores the Ollama settings and Tailor form state.
+- Tailor form state is preserved after submit; the UI provides an explicit “Clear” button.
 
 ## End-to-end execution flow
-The primary orchestrator is `app/pipeline.py:run_pipeline`:
-1. Parse resume (`parse_latex_resume`)
-2. Analyze JD (`analyze_jd` via Ollama)
-3. Map evidence (`map_evidence`)
-4. Plan changes (`plan_rewrites` via Ollama; optional fallback to `heuristic_plan`)
-5. Rewrite bullets (`rewrite_bullet` per bullet)
-6. Verify rewrites (`verify_bullet_rewrite`)
-7. Produce `ChangeReport` (suggestions + flags)
-8. Evaluate (optional) (`evaluate_tailored_resume`)
+There are two primary flows:
 
-Applying changes:
-- The pipeline returns suggestions as *pending*.
-- The UI or CLI marks suggestions as `approved`.
-- The rebuilder applies replacements (`rebuild_latex`).
+### Experience bank generation
+Implemented in `app/bank_generator/bank_builder.py`.
+
+### KB-based tailoring
+Implemented across:
+- `app/tailoring/jd_parser.py`
+- `app/rag/retriever.py`
+- `app/tailoring/evidence_verifier.py`
+- `app/tailoring/resume_assembler.py`
+
+Legacy (fallback) LaTeX editing pipeline is still available in `app/pipeline.py`, but the UI is now bank-first.
+
+## Experience bank generation flow
+The bank generator behaves like an evidence-grounded knowledge-base builder (not a resume writer):
+1. Validate + slugify `bank_folder_name`
+2. Store uploaded resume under `data/uploads/<bank>/resume.tex`
+3. Parse LaTeX into bullets/spans (no full regeneration)
+4. Extract `AtomicEvidenceClaim` records from explicit resume text
+5. Derive work/project groupings from LaTeX macros when available
+6. Validate schema constraints (evidence_id integrity, metric linking, etc.)
+7. Generate markdown files from validated JSON (deterministic writer)
+8. Ingest markdown into per-bank vector store (`index.jsonl`)
+9. Update `banks_registry.json`
+
+### Tailored resume output structure (deterministic)
+The KB-based assembler enforces a fixed, recruiter/ATS-stable LaTeX layout:
+`HEADER (unchanged from bank template) → SUMMARY → EXPERIENCE → PROJECTS → SKILLS → EDUCATION (unchanged snapshot)`
+
+Implementation:
+- `app/tailoring/resume_assembler.py`
+- `app/tailoring/skill_categorizer.py` (semantic skill grouping + recruiter-friendly category labels)
+
+How “unchanged” works:
+- The bank stores a template snapshot derived from the uploaded master resume:
+  - `data/experience_bank/<bank>/metadata/template_preamble.tex`
+  - `data/experience_bank/<bank>/metadata/template_body_header.tex` (the header block before the first `\\section`)
+  - `data/experience_bank/<bank>/metadata/education_section.tex` (education section, without `\\end{document}`)
+- Tailoring never reads from `data/uploads/...`; it only uses the stored bank snapshot.
+
+## Generated resume workspace (LaTeX editor + PDF preview)
+After a successful tailoring run, the system creates a `resume_id` and writes:
+- `resume.tex` (tailored LaTeX)
+- `resume.pdf` (compiled output, if compilation succeeds)
+- `tailored_resume.md` (tailored Markdown)
+- `tailored_resume.txt` (tailored text)
+- `traceability.json` (generated bullets → evidence_ids → source_text)
+- `compile.log` (compiler output + preflight notes)
+- `metadata.json` (paths + compile status)
+
+The Streamlit “Resume LaTeX Preview” page loads artifacts by `resume_id` (via query params) and exposes tabs:
+- Workspace (LaTeX editor + PDF preview)
+- Tailored Markdown
+- Tailored Text
+- Traceability
+- Compile Logs
+
+### LaTeX structure preflight
+Before compilation, the system validates list/macro structure:
+- every `\\begin{itemize}` has matching `\\end{itemize}`
+- `\\resumeItemListStart` matches `\\resumeItemListEnd`
+- `\\resumeSubHeadingListStart` matches `\\resumeSubHeadingListEnd`
+- exactly one `\\begin{document}` and one `\\end{document}`
+
+Safe auto-fixes (logged):
+- insert missing list “End” wrappers before `\\end{document}`
+
+Implementation:
+- `app/generated_resumes/latex_structure.py`
+- `app/generated_resumes/latex_compiler.py`
+
+## Resume artifacts API (optional)
+The repo includes a small FastAPI app that can serve bank preview files and generated resume artifacts:
+- `app/ui/api/server.py`
+
+Resume endpoints:
+- `GET /api/resumes/{resume_id}` (metadata)
+- `GET /api/resumes/{resume_id}/latex`
+- `PUT /api/resumes/{resume_id}/latex`
+- `POST /api/resumes/{resume_id}/compile`
+- `GET /api/resumes/{resume_id}/pdf`
+- `GET /api/resumes/{resume_id}/export/pdf`
+- `GET /api/resumes/{resume_id}/markdown`
+- `GET /api/resumes/{resume_id}/text`
+- `GET /api/resumes/{resume_id}/traceability`
 
 ## LLM prompt contracts
 Prompts are stored in `app/prompts.py`.

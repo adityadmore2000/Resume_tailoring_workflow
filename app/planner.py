@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 
-from app.llm import OllamaClient
+from app.llm import LLMProvider
 from app.prompts import PLANNER_PROMPT, SYSTEM_GUARDRAILS
 from app.schemas import EvidenceMap, JDAnalysis, ParsedResume, RewritePlan
 
 
-def plan_rewrites(jd: JDAnalysis, resume: ParsedResume, evidence: EvidenceMap, llm: OllamaClient) -> RewritePlan:
+def plan_rewrites(jd: JDAnalysis, resume: ParsedResume, evidence: EvidenceMap, llm: LLMProvider) -> RewritePlan:
     # Keep payload small and structured.
     resume_payload = {
         "bullets": [

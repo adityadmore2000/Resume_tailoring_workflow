@@ -5,22 +5,25 @@ import json
 import pytest
 
 from app.config import DEFAULT_CONFIG
-from app.llm import OllamaClient
+from app.llm.local_llm import BaseProvider
 from app.pipeline import PipelineOptions, run_pipeline
 from app.schemas import EvaluationReport, JDAnalysis
 from app.verifier import latex_to_plain_for_checks, verify_bullet_rewrite
 
 
-class FakeLLM(OllamaClient):
+class FakeLLM(BaseProvider):
     def __init__(self, responses: dict[str, str]):
-        super().__init__(base_url="http://fake", model="fake")
+        super().__init__(timeout_s=1)
         self._responses = responses
 
-    def chat(self, system: str, user: str) -> str:
+    def generate_text(self, *, system: str, user: str) -> str:
         for key, resp in self._responses.items():
             if key in user:
                 return resp
         return "{}"
+
+    def embed_text(self, text: str) -> list[float]:  # pragma: no cover
+        return [0.0, 0.0, 0.0]
 
 
 def test_generate_json_accepts_code_fenced_json_and_normalizes_lists():

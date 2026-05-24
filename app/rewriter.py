@@ -4,7 +4,7 @@ import json
 
 from pydantic import BaseModel, Field
 
-from app.llm import OllamaClient
+from app.llm import LLMProvider
 from app.prompts import REWRITE_PROMPT, SYSTEM_GUARDRAILS
 
 
@@ -20,7 +20,7 @@ def rewrite_bullet(
     jd_keywords: list[str],
     role_focus: list[str],
     allowed_tools_and_skills: list[str],
-    llm: OllamaClient,
+    llm: LLMProvider,
 ) -> BulletRewriteOut:
     payload = {
         "original_bullet_latex": bullet_latex,
