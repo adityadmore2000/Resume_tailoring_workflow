@@ -22,7 +22,7 @@ app/
   normalizers.py          # Schema-specific output normalization (pre-validation)
 
   llm/
-    local_llm.py           # Ollama client + JSON repair/retry/normalization
+    local_llm.py           # Provider abstraction (Ollama/OpenAI/OpenAI-compatible) + JSON repair/retry/normalization
     prompts.py             # Schema-explicit prompts per stage
 
   resume_parser/

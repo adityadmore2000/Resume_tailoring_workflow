@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.llm import LLMError, OllamaClient
+from app.llm import LLMProvider
 
 
 @dataclass(frozen=True)
@@ -41,8 +41,7 @@ def retrieve(
     query: str,
     bank_folder_name: str,
     vector_store_dir: Path,
-    llm: OllamaClient,
-    embedding_model: str,
+    llm: LLMProvider,
     top_k: int = 8,
 ) -> list[RetrievedChunk]:
     """
@@ -58,7 +57,7 @@ def retrieve(
     q_tokens = _tokenize(query)
     q_emb: list[float] | None = None
     try:
-        q_emb = llm.embed(query[:4000], embed_model=embedding_model)
+        q_emb = llm.embed_text(query[:4000])
     except Exception:
         q_emb = None
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import streamlit as st
@@ -12,7 +13,8 @@ if str(_ROOT) not in sys.path:
 from app.bank_generator.bank_builder import generate_experience_bank  # noqa: E402
 from app.bank_generator.folder_manager import BankFolderError, get_bank_paths  # noqa: E402
 from app.config import DEFAULT_CONFIG  # noqa: E402
-from app.llm import LLMError, OllamaClient  # noqa: E402
+from app.llm import LLMError  # noqa: E402
+from app.llm.factory import build_llm_provider  # noqa: E402
 from app.resume_parser.section_detector import looks_like_latex  # noqa: E402
 
 
@@ -46,10 +48,18 @@ if st.button("Generate Experience Bank", type="primary", use_container_width=Tru
         st.error("Confirm overwrite to proceed.")
         st.stop()
 
-    llm = OllamaClient(base_url=st.session_state.ollama_base_url, model=st.session_state.ollama_model)
     try:
+        cfg = DEFAULT_CONFIG
+        if cfg.llm_provider == "ollama":
+            cfg = replace(
+                cfg,
+                ollama_base_url=st.session_state.ollama_base_url,
+                ollama_model=st.session_state.ollama_model,
+                ollama_embedding_model=st.session_state.ollama_embed_model,
+            )
+        llm = build_llm_provider(cfg)
         # Pre-check existence for friendly UI.
-        paths = get_bank_paths(Path(DEFAULT_CONFIG.data_root), bank_name)
+        paths = get_bank_paths(Path(cfg.data_root), bank_name)
         if (paths.experience_bank_dir.exists() or paths.vector_store_dir.exists()) and not overwrite:
             st.warning(f"Bank `{paths.bank_folder_name}` already exists. Enable overwrite to replace it.")
             st.stop()

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from app.bank_generator.folder_manager import get_bank_paths
 from app.config import DEFAULT_CONFIG
-from app.llm import OllamaClient
+from app.llm.factory import build_llm_provider
 from app.tailoring.jd_parser import parse_jd
 from app.tailoring.evidence_verifier import verify_retrieved_evidence
 from app.tailoring.resume_assembler import assemble_from_bank
@@ -26,17 +27,19 @@ def main() -> int:
 
     jd = Path(args.jd_path).read_text(encoding="utf-8", errors="replace")
 
-    paths = get_bank_paths(Path(DEFAULT_CONFIG.data_root), args.bank_folder_name)
+    cfg = DEFAULT_CONFIG
+    paths = get_bank_paths(Path(cfg.data_root), args.bank_folder_name)
     bank_index = load_bank_index(paths.experience_bank_dir)
 
-    llm = OllamaClient(base_url=args.ollama_url, model=args.model)
+    if cfg.llm_provider == "ollama":
+        cfg = replace(cfg, ollama_base_url=args.ollama_url, ollama_model=args.model)
+    llm = build_llm_provider(cfg)
     jd_struct = parse_jd(jd, llm)
     retrieved = retrieve(
         query=jd,
         bank_folder_name=paths.bank_folder_name,
         vector_store_dir=paths.vector_store_dir,
         llm=llm,
-        embedding_model=DEFAULT_CONFIG.ollama_embedding_model,
         top_k=10,
     )
     # Map retrieved chunks back to evidence_ids if present in metadata; fallback to none.

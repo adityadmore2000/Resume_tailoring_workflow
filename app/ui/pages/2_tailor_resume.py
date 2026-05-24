@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import streamlit as st
@@ -13,7 +14,8 @@ if str(_ROOT) not in sys.path:
 from app.bank_generator.bank_builder import list_banks  # noqa: E402
 from app.bank_generator.folder_manager import get_bank_paths  # noqa: E402
 from app.config import DEFAULT_CONFIG  # noqa: E402
-from app.llm import LLMError, OllamaClient  # noqa: E402
+from app.llm import LLMError  # noqa: E402
+from app.llm.factory import build_llm_provider  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
 from app.tailoring.evidence_verifier import verify_retrieved_evidence  # noqa: E402
 from app.tailoring.jd_parser import parse_jd  # noqa: E402
@@ -82,8 +84,16 @@ if run:
             st.error("Job description is required.")
             st.stop()
 
-        llm = OllamaClient(base_url=st.session_state.ollama_base_url, model=st.session_state.ollama_model)
-        paths = get_bank_paths(Path(DEFAULT_CONFIG.data_root), selected)
+        cfg = DEFAULT_CONFIG
+        if cfg.llm_provider == "ollama":
+            cfg = replace(
+                cfg,
+                ollama_base_url=st.session_state.ollama_base_url,
+                ollama_model=st.session_state.ollama_model,
+                ollama_embedding_model=st.session_state.ollama_embed_model,
+            )
+        llm = build_llm_provider(cfg)
+        paths = get_bank_paths(Path(cfg.data_root), selected)
         bank_index = load_bank_index(paths.experience_bank_dir)
 
         with st.status("Tailoring from KB…", expanded=True) as status:
@@ -96,7 +106,6 @@ if run:
                 bank_folder_name=paths.bank_folder_name,
                 vector_store_dir=paths.vector_store_dir,
                 llm=llm,
-                embedding_model=DEFAULT_CONFIG.ollama_embedding_model,
                 top_k=12,
             )
             st.session_state["tailor_last_chunks"] = [{"chunk_id": c.chunk_id, "score": c.score, "metadata": c.metadata} for c in chunks]

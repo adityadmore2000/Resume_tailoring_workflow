@@ -7,7 +7,7 @@ from app.evidence_mapper import map_evidence
 from app.evaluator import evaluate_tailored_resume
 from app.jd_analyzer import analyze_jd
 from app.latex_rebuilder import rebuild_latex
-from app.llm import LLMError, OllamaClient
+from app.llm import LLMError, LLMProvider
 from app.parser import parse_latex_resume
 from app.planner import heuristic_plan, plan_rewrites
 from app.rewriter import rewrite_bullet
@@ -37,7 +37,7 @@ def run_pipeline(
     *,
     jd_text: str,
     resume_tex: str,
-    llm: OllamaClient,
+    llm: LLMProvider,
     cfg: AppConfig = DEFAULT_CONFIG,
     options: PipelineOptions = PipelineOptions(),
     allowed_tools_and_skills_override: list[str] | None = None,

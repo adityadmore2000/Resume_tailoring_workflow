@@ -11,6 +11,7 @@ build/
 
 # Streamlit
 .streamlit/
+.env
 
 # Outputs
 outputs/*
@@ -25,3 +26,4 @@ data/experience_bank/*
 # OS
 .DS_Store
 generated_resumes
+.env.example

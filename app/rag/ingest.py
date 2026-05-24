@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.llm import LLMError, OllamaClient
+from app.llm import LLMError, LLMProvider
 from app.rag.chunker import chunk_markdown_file
 
 
@@ -36,8 +36,7 @@ def ingest_experience_bank(
     bank_folder_name: str,
     experience_bank_dir: Path,
     vector_store_dir: Path,
-    llm: OllamaClient,
-    embedding_model: str,
+    llm: LLMProvider,
 ) -> tuple[int, list[str]]:
     """
     Ingests markdown files into a JSONL "vector store".
@@ -53,7 +52,7 @@ def ingest_experience_bank(
         for c in chunks:
             emb = None
             try:
-                emb = llm.embed(c.text[:8000], embed_model=embedding_model)
+                emb = llm.embed_text(c.text[:8000])
             except LLMError as e:
                 warnings.append(f"Embeddings unavailable for {p.name}: {e}. Falling back to keyword-only retrieval.")
                 emb = None
@@ -66,4 +65,3 @@ def ingest_experience_bank(
             f.write(json.dumps({"chunk_id": r.chunk_id, "text": r.text, "embedding": r.embedding, "metadata": r.metadata}) + "\n")
 
     return len(records), sorted(set(warnings))
-

@@ -30,6 +30,39 @@ Core principle:
 
 Configuration defaults live in `app/config.py`.
 
+## Environment configuration (LLM + embeddings)
+Provider selection is **environment-driven** (no code changes needed between local and hosted deployments).
+
+Copy `.env.example` to `.env` and edit, or export variables in your shell.
+
+**Local (Ollama)**
+```bash
+export LLM_PROVIDER=ollama
+export OLLAMA_HOST=http://localhost:11434
+export OLLAMA_MODEL=llama3.1:8b
+export OLLAMA_EMBED_MODEL=nomic-embed-text
+```
+
+**Hosted (OpenAI)**
+```bash
+export LLM_PROVIDER=openai
+export OPENAI_API_KEY=...
+export OPENAI_MODEL=gpt-4o-mini
+export OPENAI_EMBED_MODEL=text-embedding-3-small
+```
+
+**Hosted (OpenAI-compatible, e.g. Hugging Face)**
+```bash
+export LLM_PROVIDER=openai_compatible
+export OPENAI_COMPATIBLE_BASE_URL=https://api-inference.huggingface.co/v1
+export OPENAI_COMPATIBLE_API_KEY=...
+export OPENAI_COMPATIBLE_MODEL=...
+export OPENAI_COMPATIBLE_EMBED_MODEL=...
+```
+
+Security note:
+- API keys are read from environment variables only and are never shown in the Streamlit UI.
+
 ### Ollama model requirements
 This project does not require a specific model family, but it does require that:
 - the model is installed in Ollama (`ollama list` shows it)

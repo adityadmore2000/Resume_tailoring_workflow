@@ -14,8 +14,10 @@ from app.config import DEFAULT_CONFIG  # noqa: E402
 
 
 def init_state() -> None:
-    st.session_state.setdefault("ollama_base_url", DEFAULT_CONFIG.ollama_base_url)
-    st.session_state.setdefault("ollama_model", DEFAULT_CONFIG.ollama_model)
+    if DEFAULT_CONFIG.llm_provider == "ollama":
+        st.session_state.setdefault("ollama_base_url", DEFAULT_CONFIG.ollama_base_url)
+        st.session_state.setdefault("ollama_model", DEFAULT_CONFIG.ollama_model)
+        st.session_state.setdefault("ollama_embed_model", DEFAULT_CONFIG.ollama_embedding_model)
 
 
 # Deprecated: kept for compatibility if someone runs `streamlit run app/ui/app.py`.

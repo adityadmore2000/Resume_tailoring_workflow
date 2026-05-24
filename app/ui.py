@@ -18,11 +18,25 @@ from app.config import DEFAULT_CONFIG  # noqa: E402
 st.set_page_config(page_title="Resume Tailoring KB", layout="wide")
 
 st.sidebar.subheader("LLM Settings")
-st.session_state.setdefault("ollama_base_url", DEFAULT_CONFIG.ollama_base_url)
-st.session_state.setdefault("ollama_model", DEFAULT_CONFIG.ollama_model)
-st.session_state.ollama_base_url = st.sidebar.text_input("Ollama base URL", value=st.session_state.ollama_base_url)
-st.session_state.ollama_model = st.sidebar.text_input("Ollama model", value=st.session_state.ollama_model)
-st.sidebar.caption("If you see “model not found”, run `ollama list` and `ollama pull <model>`.")
+st.sidebar.code(f"LLM_PROVIDER={DEFAULT_CONFIG.llm_provider}")
+if DEFAULT_CONFIG.llm_provider == "ollama":
+    st.session_state.setdefault("ollama_base_url", DEFAULT_CONFIG.ollama_base_url)
+    st.session_state.setdefault("ollama_model", DEFAULT_CONFIG.ollama_model)
+    st.session_state.setdefault("ollama_embed_model", DEFAULT_CONFIG.ollama_embedding_model)
+    st.session_state.ollama_base_url = st.sidebar.text_input("Ollama base URL", value=st.session_state.ollama_base_url)
+    st.session_state.ollama_model = st.sidebar.text_input("Ollama model", value=st.session_state.ollama_model)
+    st.session_state.ollama_embed_model = st.sidebar.text_input("Ollama embed model", value=st.session_state.ollama_embed_model)
+    st.sidebar.caption("If you see “model not found”, run `ollama list` and `ollama pull <model>`.")
+elif DEFAULT_CONFIG.llm_provider == "openai":
+    st.sidebar.text_input("OpenAI base URL", value=DEFAULT_CONFIG.openai_base_url, disabled=True)
+    st.sidebar.text_input("OpenAI model", value=DEFAULT_CONFIG.openai_model, disabled=True)
+    st.sidebar.text_input("OpenAI embed model", value=DEFAULT_CONFIG.openai_embedding_model, disabled=True)
+    st.sidebar.caption("Keys are read from environment variables only (not shown in UI).")
+else:
+    st.sidebar.text_input("Base URL", value=DEFAULT_CONFIG.openai_compatible_base_url or "", disabled=True)
+    st.sidebar.text_input("Model", value=DEFAULT_CONFIG.openai_compatible_model or "", disabled=True)
+    st.sidebar.text_input("Embed model", value=DEFAULT_CONFIG.openai_compatible_embedding_model or "", disabled=True)
+    st.sidebar.caption("Keys are read from environment variables only (not shown in UI).")
 
 _PAGES_DIR = Path(__file__).resolve().parent / "ui" / "pages"
 _CREATE = _PAGES_DIR / "1_create_experience_bank.py"

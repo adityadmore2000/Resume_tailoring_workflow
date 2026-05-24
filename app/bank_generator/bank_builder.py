@@ -11,7 +11,7 @@ from app.bank_generator.markdown_writer import write_bank_markdown
 from app.bank_generator.schemas import ExperienceBankIndex
 from app.bank_generator.validator import BankValidationResult, validate_experience_bank
 from app.config import AppConfig, DEFAULT_CONFIG
-from app.llm import OllamaClient
+from app.llm import LLMProvider
 from app.rag.ingest import ingest_experience_bank
 from app.resume_parser.latex_parser import parse_latex_resume
 from app.resume_parser.text_parser import parse_plain_text_resume
@@ -31,7 +31,7 @@ def generate_experience_bank(
     *,
     resume_tex: str,
     bank_folder_name: str,
-    llm: OllamaClient,
+    llm: LLMProvider,
     cfg: AppConfig = DEFAULT_CONFIG,
     overwrite: bool = False,
     source_format: str = "latex",
@@ -165,7 +165,6 @@ def generate_experience_bank(
         experience_bank_dir=paths.experience_bank_dir,
         vector_store_dir=paths.vector_store_dir,
         llm=llm,
-        embedding_model=cfg.ollama_embedding_model,
     )
     messages.extend(ingest_warnings)
 
