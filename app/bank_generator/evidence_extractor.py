@@ -15,6 +15,7 @@ from app.schemas import ParsedResume, SectionName
 
 
 _NUM_RE = re.compile(r"(?<!\\)\b\d+(?:\.\d+)?%?\b")
+_DATE_SPLIT_RE = re.compile(r"\s*(?:--|–|—|-|to)\s*", flags=re.IGNORECASE)
 
 
 def _stable_id(prefix: str, text: str) -> str:
@@ -29,6 +30,40 @@ def _strip_tex_commands(s: str) -> str:
     s = re.sub(r"[{}]", "", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+def _parse_date_range(raw: str) -> tuple[str, str]:
+    raw = (raw or "").strip()
+    if not raw:
+        return "Unclear from resume", "Unclear from resume"
+    parts = [p.strip() for p in _DATE_SPLIT_RE.split(raw) if p.strip()]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    # Keep what we have; don't guess.
+    return raw, "Unclear from resume"
+
+
+def _split_display_title(display_title_latex: str) -> tuple[str, str, str]:
+    """
+    Best-effort parse of "Role | Company" style titles.
+    Returns (role_title, employment_type_or_label, company).
+    Never invents data; returns "Unclear from resume" when uncertain.
+    """
+    plain = _strip_tex_commands(display_title_latex)
+    # Normalize common LaTeX resume separator "$|$" into a split token.
+    plain = plain.replace("$|$", "|")
+    parts = [p.strip() for p in plain.split("|") if p.strip()]
+    if len(parts) < 2:
+        return "Unclear from resume", "", plain or "Unclear from resume"
+
+    role = parts[0]
+    right = parts[-1]
+    right_cf = right.casefold()
+    # Heuristic: treat these as labels rather than companies.
+    label_tokens = {"freelancer", "self-employed", "independent", "contract", "contractor"}
+    if right_cf in label_tokens:
+        return role or "Unclear from resume", right, ""
+    return role or "Unclear from resume", "", right or "Unclear from resume"
 
 
 def extract_atomic_evidence(parsed: ParsedResume, *, bank_folder_name: str) -> tuple[list[AtomicEvidenceClaim], list[MetricEntry]]:
@@ -130,10 +165,15 @@ def extract_work_and_projects(parsed: ParsedResume, evidence_claims: list[Atomic
                 work.append(
                     WorkExperienceEntry(
                         entry_id=_stable_id("work", "experience_fallback"),
+                        role_title="Unclear from resume",
+                        employment_type_or_label="",
                         company="Unclear from resume",
-                        title="Unclear from resume",
-                        date_range="Unclear from resume",
+                        display_title="Unclear from resume",
+                        subtitle="Unclear from resume",
+                        start_date="Unclear from resume",
+                        end_date="Unclear from resume",
                         location="Unclear from resume",
+                        source_text=sec.raw_text,
                         evidence_ids=all_ids,
                     )
                 )
@@ -144,17 +184,26 @@ def extract_work_and_projects(parsed: ParsedResume, evidence_claims: list[Atomic
             abs_start = sec.span_start + end_rel
             abs_end = sec.span_start + next_start_rel
             ev_ids = evidence_in_range(abs_start, abs_end)
-            company = _strip_tex_commands(args[0]) if len(args) > 0 else "Unclear from resume"
-            date_range = _strip_tex_commands(args[1]) if len(args) > 1 else "Unclear from resume"
-            title = _strip_tex_commands(args[2]) if len(args) > 2 else "Unclear from resume"
-            location = _strip_tex_commands(args[3]) if len(args) > 3 else "Unclear from resume"
+            display_title = (args[0].strip() if len(args) > 0 else "") or "Unclear from resume"
+            date_range = (args[1].strip() if len(args) > 1 else "") or "Unclear from resume"
+            subtitle = (args[2].strip() if len(args) > 2 else "") or "Unclear from resume"
+            # Preserve empty location if the resume explicitly left it blank.
+            location = (args[3].strip() if len(args) > 3 else "")
+            start_date, end_date = _parse_date_range(_strip_tex_commands(date_range))
+            role_title, employment_type_or_label, company = _split_display_title(display_title)
+            source_text = sec.raw_text[start_rel:end_rel].strip()
             work.append(
                 WorkExperienceEntry(
-                    entry_id=_stable_id("work", f"{company}|{title}|{date_range}|{location}"),
-                    company=company or "Unclear from resume",
-                    title=title or "Unclear from resume",
-                    date_range=date_range or "Unclear from resume",
-                    location=location or "Unclear from resume",
+                    entry_id=_stable_id("work", f"{display_title}|{subtitle}|{date_range}|{location}"),
+                    role_title=role_title,
+                    employment_type_or_label=employment_type_or_label,
+                    company=company,
+                    display_title=display_title,
+                    subtitle=subtitle,
+                    start_date=start_date,
+                    end_date=end_date,
+                    location=location,
+                    source_text=source_text,
                     evidence_ids=ev_ids,
                 )
             )

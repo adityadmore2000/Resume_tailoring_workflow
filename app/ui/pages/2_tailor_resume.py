@@ -41,58 +41,63 @@ jd_text = st.text_area("Or paste JD", value=jd_text, height=240)
 run = st.button("Tailor using selected bank", type="primary", use_container_width=True)
 
 if run:
-    if not selected:
-        st.error("Select a bank first.")
+    try:
+        if not selected:
+            st.error("Select a bank first.")
+            st.stop()
+        if not jd_text.strip():
+            st.error("Job description is required.")
+            st.stop()
+
+        llm = OllamaClient(base_url=st.session_state.ollama_base_url, model=st.session_state.ollama_model)
+        paths = get_bank_paths(Path(DEFAULT_CONFIG.data_root), selected)
+        bank_index = load_bank_index(paths.experience_bank_dir)
+
+        with st.status("Tailoring from KB…", expanded=True) as status:
+            st.write("Parsing JD → structured requirements")
+            jd_struct = parse_jd(jd_text, llm)
+
+            st.write("Retrieving evidence (hybrid)")
+            chunks = retrieve(
+                query=jd_text,
+                bank_folder_name=paths.bank_folder_name,
+                vector_store_dir=paths.vector_store_dir,
+                llm=llm,
+                embedding_model=DEFAULT_CONFIG.ollama_embedding_model,
+                top_k=12,
+            )
+            st.json([{"chunk_id": c.chunk_id, "score": c.score, "metadata": c.metadata} for c in chunks])
+
+            retrieved_eids: list[str] = []
+            for c in chunks:
+                eids = c.metadata.get("evidence_ids")
+                if isinstance(eids, list):
+                    retrieved_eids.extend([str(x) for x in eids])
+            retrieved_eids = list(dict.fromkeys(retrieved_eids))
+            if not retrieved_eids:
+                st.warning("No evidence_ids found in retrieved chunks; falling back to first 80 evidence claims.")
+                retrieved_eids = [e.evidence_id for e in bank_index.evidence_claims[:80]]
+
+            st.write("Evidence verification (deterministic)")
+            verified, evidence_map = verify_retrieved_evidence(jd=jd_struct, bank_index=bank_index, retrieved_evidence_ids=retrieved_eids)
+            st.json(evidence_map.model_dump())
+
+            st.write("Resume assembly (evidence-grounded)")
+            assembled = assemble_from_bank(
+                bank_dir=paths.experience_bank_dir,
+                bank_index=bank_index,
+                verified_evidence=verified,
+                jd=jd_struct,
+            )
+            if assembled.messages:
+                for m in assembled.messages:
+                    st.info(m)
+
+            status.update(label="Tailored resume assembled", state="complete")
+    except Exception as e:
+        st.error("Tailoring failed due to an unexpected format or validation issue. The system kept your bank unchanged.")
+        st.exception(e)
         st.stop()
-    if not jd_text.strip():
-        st.error("Job description is required.")
-        st.stop()
-
-    llm = OllamaClient(base_url=st.session_state.ollama_base_url, model=st.session_state.ollama_model)
-    paths = get_bank_paths(Path(DEFAULT_CONFIG.data_root), selected)
-    bank_index = load_bank_index(paths.experience_bank_dir)
-
-    with st.status("Tailoring from KB…", expanded=True) as status:
-        st.write("Parsing JD → structured requirements")
-        jd_struct = parse_jd(jd_text, llm)
-
-        st.write("Retrieving evidence (hybrid)")
-        chunks = retrieve(
-            query=jd_text,
-            bank_folder_name=paths.bank_folder_name,
-            vector_store_dir=paths.vector_store_dir,
-            llm=llm,
-            embedding_model=DEFAULT_CONFIG.ollama_embedding_model,
-            top_k=12,
-        )
-        st.json([{"chunk_id": c.chunk_id, "score": c.score, "metadata": c.metadata} for c in chunks])
-
-        retrieved_eids: list[str] = []
-        for c in chunks:
-            eids = c.metadata.get("evidence_ids")
-            if isinstance(eids, list):
-                retrieved_eids.extend([str(x) for x in eids])
-        retrieved_eids = list(dict.fromkeys(retrieved_eids))
-        if not retrieved_eids:
-            st.warning("No evidence_ids found in retrieved chunks; falling back to first 80 evidence claims.")
-            retrieved_eids = [e.evidence_id for e in bank_index.evidence_claims[:80]]
-
-        st.write("Evidence verification (deterministic)")
-        verified, evidence_map = verify_retrieved_evidence(jd=jd_struct, bank_index=bank_index, retrieved_evidence_ids=retrieved_eids)
-        st.json(evidence_map.model_dump())
-
-        st.write("Resume assembly (evidence-grounded)")
-        assembled = assemble_from_bank(
-            bank_dir=paths.experience_bank_dir,
-            bank_index=bank_index,
-            verified_evidence=verified,
-            jd=jd_struct,
-        )
-        if assembled.messages:
-            for m in assembled.messages:
-                st.info(m)
-
-        status.update(label="Tailored resume assembled", state="complete")
 
     st.subheader("Tailored LaTeX")
     st.code(assembled.latex, language="latex")

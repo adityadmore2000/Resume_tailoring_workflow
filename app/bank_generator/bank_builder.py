@@ -118,6 +118,17 @@ def generate_experience_bank(
 
     # Persist unchanged EDUCATION block for deterministic final layout.
     if source_format != "text":
+        # Persist unchanged SUMMARY block for deterministic final layout.
+        summary_sections = [s for s in parsed.sections if s.name.value.casefold() == "summary"]
+        if summary_sections:
+            summary_raw = summary_sections[0].raw_text
+            (paths.experience_bank_dir / "metadata" / "summary_section.tex").write_text(summary_raw, encoding="utf-8")
+        else:
+            messages.append("SUMMARY section not found; a placeholder SUMMARY will be used during tailoring.")
+            (paths.experience_bank_dir / "metadata" / "summary_section.tex").write_text(
+                "\\section{SUMMARY}\n\\small{Unclear from resume.}\n", encoding="utf-8"
+            )
+
         edu_sections = [s for s in parsed.sections if s.name.value.casefold() == "education"]
         if edu_sections:
             edu_raw = edu_sections[0].raw_text

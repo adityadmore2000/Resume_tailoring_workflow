@@ -47,10 +47,16 @@ class AtomicEvidenceClaim(BaseModel):
 
 class WorkExperienceEntry(BaseModel):
     entry_id: str
-    company: str = "Unclear from resume"
-    title: str = "Unclear from resume"
-    date_range: str = "Unclear from resume"
+    # Preserve original hierarchy/metadata from the source resume.
+    role_title: str = "Unclear from resume"
+    employment_type_or_label: str = ""
+    company: str = ""
+    display_title: str = "Unclear from resume"
+    subtitle: str = "Unclear from resume"
+    start_date: str = "Unclear from resume"
+    end_date: str = "Unclear from resume"
     location: str = "Unclear from resume"
+    source_text: str = ""
     evidence_ids: list[str] = Field(default_factory=list)
 
 
@@ -114,4 +120,3 @@ class ExperienceBankIndex(BaseModel):
     deployments: list[DeploymentWorkflow] = Field(default_factory=list)
     metrics: list[MetricEntry] = Field(default_factory=list)
     reusable_bullets: list[ReusableResumeBullet] = Field(default_factory=list)
-

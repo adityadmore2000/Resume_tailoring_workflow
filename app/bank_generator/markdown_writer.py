@@ -47,12 +47,18 @@ def write_bank_markdown(bank_dir: Path, index: ExperienceBankIndex) -> None:
 
     # Work experience
     for w in index.work_experience:
+        date_range = f"{w.start_date} - {w.end_date}".strip()
+        title_line = w.display_title or "Unclear from resume"
         md = [
-            f"# {w.title} @ {w.company}",
+            f"# {title_line}",
             "",
             "## Overview",
-            f"- Date range: {w.date_range}",
-            f"- Location: {w.location}",
+            f"- Subtitle/domain: {w.subtitle}",
+            f"- Date range: {date_range}",
+            f"- Location: {w.location or ''}",
+            f"- Role title: {w.role_title}",
+            f"- Employment label: {w.employment_type_or_label}",
+            f"- Company: {w.company}",
             "",
             "## Evidence (from resume)",
         ]
