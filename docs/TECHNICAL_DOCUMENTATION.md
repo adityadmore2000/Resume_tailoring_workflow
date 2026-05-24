@@ -6,7 +6,7 @@ This document explains how the codebase works, the data contracts, and how to ex
 ```
 app/
   main.py                 # CLI entrypoint
-  ui.py                   # Streamlit human review UI
+  ui.py                   # Streamlit multi-page UI (bank → tailor → preview)
   config.py               # Safety + model config
   schemas.py              # Pydantic contracts
   prompts.py              # Back-compat shim for prompts
@@ -48,8 +48,14 @@ app/
 
   tailoring/
     jd_parser.py           # Wrapper around JD analysis
-    resume_assembler.py    # Loads bank index for tailoring-time constraints
+    resume_assembler.py    # Deterministic LaTeX assembly from bank evidence
     hallucination_guard.py # Extra guard helpers
+    skill_categorizer.py   # Evidence-grounded skill grouping + category labels
+
+  generated_resumes/
+    resume_store.py        # Stores per-resume artifacts under data/generated_resumes/...
+    latex_structure.py     # LaTeX list/macro structure validation + safe auto-fix
+    latex_compiler.py      # latexmk/pdflatex wrapper with timeouts + preflight
 
 docs/
   SYSTEM_DESIGN.md
@@ -72,6 +78,7 @@ data/
   experience_bank/
     banks_registry.json
   vector_store/
+  generated_resumes/
 
 scripts/
   generate_experience_bank.py
@@ -95,14 +102,13 @@ These schemas act as **contracts** between modules, making the pipeline more tes
 
 ## Inputs and outputs
 Inputs:
-- JD text (string)
-- Resume LaTeX (string)
+- Phase 1 (bank creation): master resume (LaTeX/text)
+- Phase 2 (tailoring): selected bank + JD text
 
 Outputs:
-- Tailored LaTeX (string) — produced by applying only user-approved suggestions
-- Change report (JSON) — suggestions, reasons, flags
-- Evaluation report (JSON) — recruiter-style decision
-- Artifacts (JSON) — JD analysis, evidence map, rewrite plan
+- Tailored LaTeX/Markdown/Text (strings)
+- Evidence map (JSON) for verification
+- Generated resume workspace artifacts under `data/generated_resumes/<bank>/<resume_id>/...`
 
 Experience bank outputs (optional, for bank-driven workflows):
 - `data/uploads/<bank>/resume.tex` (source snapshot)
@@ -157,11 +163,14 @@ This UI is organized around the two-phase product flow:
    - Paste/upload JD
    - Retrieve + verify evidence from the bank
    - Assemble a tailored resume (LaTeX/Markdown/Text)
+   - Persist artifacts under `data/generated_resumes/<bank>/<resume_id>/...`
+   - Auto-navigate into the Resume Preview workspace
 
 Important: **Tailoring does not accept a resume input.**
 
 State management:
-- `st.session_state` stores the Ollama settings and page-local widget state.
+- `st.session_state` stores the Ollama settings and Tailor form state.
+- Tailor form state is preserved after submit; the UI provides an explicit “Clear” button.
 
 ## End-to-end execution flow
 There are two primary flows:
@@ -204,6 +213,52 @@ How “unchanged” works:
   - `data/experience_bank/<bank>/metadata/template_body_header.tex` (the header block before the first `\\section`)
   - `data/experience_bank/<bank>/metadata/education_section.tex` (education section, without `\\end{document}`)
 - Tailoring never reads from `data/uploads/...`; it only uses the stored bank snapshot.
+
+## Generated resume workspace (LaTeX editor + PDF preview)
+After a successful tailoring run, the system creates a `resume_id` and writes:
+- `resume.tex` (tailored LaTeX)
+- `resume.pdf` (compiled output, if compilation succeeds)
+- `tailored_resume.md` (tailored Markdown)
+- `tailored_resume.txt` (tailored text)
+- `traceability.json` (generated bullets → evidence_ids → source_text)
+- `compile.log` (compiler output + preflight notes)
+- `metadata.json` (paths + compile status)
+
+The Streamlit “Resume LaTeX Preview” page loads artifacts by `resume_id` (via query params) and exposes tabs:
+- Workspace (LaTeX editor + PDF preview)
+- Tailored Markdown
+- Tailored Text
+- Traceability
+- Compile Logs
+
+### LaTeX structure preflight
+Before compilation, the system validates list/macro structure:
+- every `\\begin{itemize}` has matching `\\end{itemize}`
+- `\\resumeItemListStart` matches `\\resumeItemListEnd`
+- `\\resumeSubHeadingListStart` matches `\\resumeSubHeadingListEnd`
+- exactly one `\\begin{document}` and one `\\end{document}`
+
+Safe auto-fixes (logged):
+- insert missing list “End” wrappers before `\\end{document}`
+
+Implementation:
+- `app/generated_resumes/latex_structure.py`
+- `app/generated_resumes/latex_compiler.py`
+
+## Resume artifacts API (optional)
+The repo includes a small FastAPI app that can serve bank preview files and generated resume artifacts:
+- `app/ui/api/server.py`
+
+Resume endpoints:
+- `GET /api/resumes/{resume_id}` (metadata)
+- `GET /api/resumes/{resume_id}/latex`
+- `PUT /api/resumes/{resume_id}/latex`
+- `POST /api/resumes/{resume_id}/compile`
+- `GET /api/resumes/{resume_id}/pdf`
+- `GET /api/resumes/{resume_id}/export/pdf`
+- `GET /api/resumes/{resume_id}/markdown`
+- `GET /api/resumes/{resume_id}/text`
+- `GET /api/resumes/{resume_id}/traceability`
 
 ## LLM prompt contracts
 Prompts are stored in `app/prompts.py`.

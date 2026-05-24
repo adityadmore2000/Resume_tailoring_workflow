@@ -70,6 +70,7 @@ Legacy note:
 Workflow:
 1. Create an `EXPERIENCE_BANK` from a master resume (upload once)
 2. Tailor a resume by selecting a bank + providing a JD (no resume upload during tailoring)
+3. On success, the app auto-opens the “Resume LaTeX Preview” workspace (edit + compile + export)
 
 ## LaTeX editor + PDF preview (generated resumes)
 After tailoring, the UI creates an editable workspace:
@@ -79,6 +80,7 @@ After tailoring, the UI creates an editable workspace:
 - `data/generated_resumes/<bank_folder_name>/<resume_id>/tailored_resume.txt`
 - `data/generated_resumes/<bank_folder_name>/<resume_id>/traceability.json`
 - `data/generated_resumes/<bank_folder_name>/<resume_id>/compile.log`
+- `data/generated_resumes/<bank_folder_name>/<resume_id>/metadata.json`
 
 If compilation fails, the UI shows the compile log and keeps the last successful PDF (if any).
 
