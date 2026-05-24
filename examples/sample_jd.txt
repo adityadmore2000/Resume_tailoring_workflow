@@ -1,0 +1,13 @@
+Senior AI Systems Engineer
+
+Responsibilities:
+- Build reliable LLM-powered systems with strong guardrails and validation.
+- Design multi-step pipelines for information extraction, planning, and controlled rewriting.
+- Work with Python services and ship production-style tooling.
+- Experience with evaluation, safety checks, and human-in-the-loop workflows.
+
+Requirements:
+- Strong Python, API design, and testing (pytest).
+- Familiarity with local LLM deployment (e.g., Ollama) is a plus.
+- Ability to produce clear system design and technical documentation.
+

@@ -1,0 +1,238 @@
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage[scale=0.90,lf]{FiraMono}
+
+% Color Definitions
+\definecolor{light-grey}{gray}{0.83}
+\definecolor{dark-grey}{gray}{0.3}
+\definecolor{text-grey}{gray}{.08}
+
+\usepackage[T1]{fontenc}
+\usepackage{tgheros}
+\renewcommand*\familydefault{\sfdefault} 
+
+\pagestyle{fancy}
+\fancyhf{} 
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{0in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Section formatting
+\titleformat {\section}{
+    \bfseries \vspace{2pt} \raggedright \large 
+}{}{0em}{}[\color{light-grey} {\titlerule[2pt]} \vspace{-4pt}]
+
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-1pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-1pt}\item
+    \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & {\color{dark-grey}\small #2}\vspace{1pt}\\
+      \textit{#3} & {\color{dark-grey} \small #4}\\
+    \end{tabular*}\vspace{-4pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+      #1 & {\color{dark-grey} \small #2} \\
+    \end{tabular*}\vspace{-4pt}
+}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0pt}}
+
+\color{text-grey}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    \textbf{\Huge Aditya More} \\ \vspace{5pt}
+    \small AI Engineer $|$ Computer Vision $|$ Generative AI $|$ LLM Systems $|$ Deep Learning $|$ PyTorch $|$ MLOps\\ \vspace{5pt}
+    \faPhone* \texttt{+91 7058067035} \hspace{1pt} $|$
+    \hspace{1pt} \faEnvelope \hspace{2pt} \texttt{adityadmore2000@gmail.com} \hspace{1pt} $|$ 
+    \hspace{1pt} \faLinkedin \hspace{2pt} \href{https://www.linkedin.com/in/adityamore2k/}{\texttt{adityamore2k}} \hspace{1pt} $|$
+    \hspace{1pt} \faGithub \hspace{2pt} \href{https://github.com/adityadmore2000/}{\texttt{adityadmore2000}}
+    \\ \vspace{2pt}
+    \small Pune, India
+\end{center}
+
+%-----------PROFILE-----------
+\section{SUMMARY}
+\small{AI/ML Engineer experienced in building deep learning, computer vision, and generative AI systems using Python and PyTorch. Worked on real-time computer vision pipelines, model training, inference optimization, and production-oriented AI workflows across surveillance analytics and LLM-based systems. Experienced in AI deployment workflows, model evaluation, and frontend-integrated AI applications using React-based technologies.}
+%-----------EXPERIENCE-----------
+\section{EXPERIENCE}
+\resumeSubHeadingListStart
+
+\resumeSubheading
+{Software Engineering Intern $|$ NDSoftTech Solutions}{03/2026 - 05/2026}
+{NDSS Internship}{Pune, India}
+
+\resumeItemListStart
+
+\resumeItem{Developed and integrated production-oriented mobile application features using \textbf{React Native}, Firebase, and API-driven workflows across profile, wallet, rewards, and authentication systems.}
+
+\resumeItem{Implemented reusable UI architectures, structured loading states, optimistic updates, and frontend state synchronization to improve application responsiveness and user experience.}
+
+\resumeItem{Worked on media upload workflows, profile systems, and API-integrated frontend features involving asynchronous state handling and backend-connected user flows.}
+
+\resumeItem{Collaborated using \textbf{Git/GitHub} workflows including pull requests, merge conflict resolution, local debugging, and feature integration across shared codebases.}
+
+\resumeItem{Used AI-assisted development workflows involving design-to-code tooling, rapid UI prototyping, debugging, and iterative feature implementation across mobile application modules.}
+
+\resumeItemListEnd
+
+\resumeSubheading
+  {AI Engineer $|$ Freelancer}{07/2024 - 03/2026}
+  {Computer Vision \& Generative AI Systems Development}{}
+  \resumeItemListStart
+  \resumeItem{Developed AI monitoring and warehouse parcel tampering detection systems using YOLO-based real-time video inference workflows for PPE compliance, worker/vehicle tracking, restricted-zone intrusion alerts, and surveillance analytics.}
+\resumeItem{Achieved 92.7\% precision, 95.0\% recall, and 97.4\% mAP50 on parcel-condition detection workflows using YOLO-based computer vision models.}
+
+    \resumeItem{Implemented event-driven monitoring logic including line-crossing analytics, zone-based alerts, tracking-ID association, OCR-assisted metadata extraction, and rule-based incident triggering across surveillance pipelines.}
+
+    \resumeItem{Worked on drone-imagery-based agricultural monitoring systems involving vegetation analysis, weed-region detection, orchard yield estimation, and field-level analytics using lightweight segmentation and detection models.}
+
+    \resumeItem{Built production-oriented hybrid LLM systems using \textbf{OpenAI API}, \textbf{Ollama}, and Python, enabling fallback routing, offline-first execution, cost optimization, and improved inference reliability.}
+
+    \resumeItem{Engineered an offline voice-to-voice LLM system using \textbf{LiveKit}, \textbf{LlamaIndex}, and locally hosted models, obtaining a real-time conversational AI}
+
+    \resumeItem{Designed orchestrated AI workflows integrating speech-to-text, retrieval, LLM reasoning, and text-to-speech components, improving system control, response reliability, and offline execution capabilities.}
+
+    \resumeItem{Implemented \textbf{RAG} workflows using vector embeddings, semantic search, and \textbf{LlamaIndex} for context-aware responses over structured document corpora.}
+
+    \resumeItem{Built containerized inference workflows using \textbf{Docker}, local GPU execution, and reproducible deployment pipelines for efficient model serving and offline inference.}
+
+    \resumeItem{Developed modular AI reasoning workflows using structured outputs, deterministic verification with \textbf{SymPy}, retry-aware execution, and multi-stage orchestration for improved reliability.}
+
+    \resumeItem{Implemented reproducible MLOps workflows using MLflow and DVC-friendly dataset/version management for experiment tracking, model evaluation, hyperparameter tuning, and artifact comparison across YOLO-based surveillance analytics pipelines.}
+
+    \resumeItem{Performed deployment-oriented experimentation involving confidence-threshold calibration, inference optimization, confusion-matrix analysis, and false-positive reduction using negative-sample refinement strategies.}
+  \resumeItemListEnd
+
+\resumeSubheading
+  {AI/ML Engineer $|$ Neilsoft}{07/2023 - 07/2024}
+  {Computer Vision Engineering}{Pune, India}
+  \resumeItemListStart
+
+    \resumeItem{Developed and integrated Computer Vision pipelines using \textbf{YOLOv5}, \textbf{YOLOX}, \textbf{YOLOv8}, and \textbf{PyTorch} for object detection and instance segmentation across architectural, structural, and MEP domains, improving inference reliability and production deployment readiness.}
+
+    \resumeItem{Engineered scalable model development workflows using large-scale domain-specific datasets with \textbf{1300+ training images}, including preprocessing, annotation validation, augmentation strategies, COCO conversion, and precision optimization across \textbf{15+ object classes}.}
+
+    \resumeItem{Delivered production-ready detection models achieving up to \textbf{83.4 mAP} for ARCH, \textbf{85.1 mAP} for MEP, and stable validation performance of \textbf{0.54 COCO AP50--95}, improving detection quality across architectural and MEP systems.}
+
+    \resumeItem{Performed precision--recall benchmarking across YOLOX and YOLOv8 for ladder and staircase detection, where YOLOX achieved higher precision (\textbf{81.67 AP}) while YOLOv8 delivered stronger recall (\textbf{100\%}), supporting architecture-specific deployment decisions based on use-case requirements.}
+
+    \resumeItem{Used \textbf{Pandas} for dataset and annotation analysis, identifying class imbalance and over-annotated samples to improve dataset quality and training reliability.}
+    
+    \resumeItem{Set up and debugged point cloud segmentation frameworks including \textbf{SoftGroup}, \textbf{RepSurf}, and PointGroup, resolving environment and dependency issues, and supported comparative evaluation of approaches for domain-specific use cases.}
+    
+  \resumeItemListEnd  
+\resumeSubHeadingListEnd
+%-----------PROJECTS-----------
+\section{PROJECTS}
+\resumeSubHeadingListStart
+
+\resumeProjectHeading
+{\textbf{Math Mentor AI} $|$ \emph{LLM + Tool-Based Reasoning System}}{}
+\resumeItemListStart
+\resumeItem{Experimented with open-source reasoning models using \textbf{Hugging Face Transformers}, evaluating mathematical reasoning performance and reliability limitations in LLM-based problem solving.}
+
+\resumeItem{Built an end-to-end math reasoning pipeline combining LLM-generated reasoning with deterministic verification using \textbf{SymPy}.}
+
+\resumeItem{Designed modular AI workflows integrating structured outputs, deterministic verification, retry-aware execution, and multi-stage orchestration for improved reliability.}
+
+\resumeItem{Implemented validation and normalization workflows for AI-generated outputs using deterministic verification and retry-aware response handling.}
+
+\resumeItemListEnd
+
+\resumeProjectHeading
+{\textbf{Offline Voice-to-Voice AI Assistant} $|$ \emph{LiveKit, LlamaIndex, Docker}}{}
+\resumeItemListStart
+\resumeItem{Developed a real-time voice-based AI assistant using locally hosted LLMs, enabling end-to-end offline conversational interaction.}
+\resumeItem{Implemented retrieval-augmented generation (RAG) pipelines using vector embeddings and semantic search, improving contextual relevance and response accuracy for knowledge-based queries.}
+\resumeItem{Designed a streaming pipeline for speech input/output and LLM inference, optimizing latency and interaction smoothness.}
+\resumeItem{Containerized local inference workflows using \textbf{Docker} and GPU-backed execution for reproducible offline deployment and low-latency conversational interaction.}
+\resumeItemListEnd
+
+\resumeProjectHeading
+{\textbf{Warehouse Parcel Monitoring \& Video Analytics System} $|$ \emph{YOLO, PyTorch, FastAPI, MLflow}}{}
+\resumeItemListStart
+\resumeItem{Developed a modular warehouse surveillance analytics pipeline for parcel-condition monitoring and investigation-oriented CCTV review workflows using YOLO-based video inference.}
+
+\resumeItem{Implemented object detection, lightweight tracking-ID association, line-crossing analytics, OCR-assisted metadata extraction, and rule-based event triggering across sampled video streams.
+}
+
+\resumeItem{Built structured evidence extraction workflows for parcel movement history, timestamp-linked handling events, and condition-based incident review from CCTV footage.
+}
+
+\resumeItem{Achieved \textbf{92.7\%} precision, \textbf{95.0\%} recall, and \textbf{97.4\%} mAP50 on parcel-condition detection workflows using YOLO-based computer vision models.
+}
+
+\resumeItem{Integrated MLflow-based experiment tracking and DVC-friendly dataset/version management for reproducible training, evaluation, artifact comparison, and inference analysis workflows.
+}
+
+\resumeItem{Redesigned the pipeline into a multi-stage architecture separating warehouse parcel localization and tamper-condition analysis after identifying domain-shift and small-object limitations during real CCTV inference.}
+
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
+%-----------SKILLS-----------
+\section{SKILLS}
+\begin{itemize}[leftmargin=0in, label={}]
+\small{\item{
+
+\textbf{Programming \& Frameworks:} {Python, FastAPI, Pandas, NumPy, Hugging Face Transformers} \\
+
+\textbf{Machine Learning \& Computer Vision:} {PyTorch, Deep Learning, Computer Vision, YOLOv5, YOLOX, YOLOv8, Object Detection, Instance Segmentation, Image Classification, Model Training, Model Evaluation, Dataset Engineering, Data Preprocessing} \\
+
+\textbf{Generative AI \& LLM Systems:} {LLMs, OpenAI API, Ollama, LlamaIndex, RAG, Semantic Search, Vector Embeddings, Prompt Engineering, Structured Outputs, Tool Calling, Multi-Agent Workflows} \\
+
+\textbf{Deployment \& Infrastructure:} {Docker, MLflow, DVC, CUDA, GPU-Based Training, Experiment Tracking, Model Evaluation, Batch Inference, API-Based Model Serving, Runtime Optimization} \\
+
+\textbf{Additional Exposure:} {ONNX Model Export, OCR Workflows, Torchserve, Git/GitHub}
+}}
+\end{itemize}
+%-----------EDUCATION-----------
+\section{EDUCATION}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Marathwada Mitra Mandal’s Institute of Technology}{Pune, India}
+      {Bachelor of Engineering (B.E) in Computer Engineering}{July 2023}
+
+\end{document}
