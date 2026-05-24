@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
-from typing import Any
 
 import streamlit as st
 
@@ -14,12 +12,13 @@ if str(_ROOT) not in sys.path:
 from app.bank_generator.bank_builder import list_banks  # noqa: E402
 from app.bank_generator.folder_manager import get_bank_paths  # noqa: E402
 from app.config import DEFAULT_CONFIG  # noqa: E402
-from app.ui.api.bank_preview_api import compute_stats, load_index_jsonl, tree_for_expected_dirs  # noqa: E402
-from app.ui.api.experience_banks_api import list_bank_files, read_bank_file  # noqa: E402
+from app.tailoring.resume_assembler import load_bank_index  # noqa: E402
+from app.ui.api.bank_preview_api import compute_stats  # noqa: E402
+from app.ui.api.experience_banks_api import BankItemSummary, list_bank_items  # noqa: E402
 
 
 st.title("Preview Experience Bank")
-st.caption("Read-only file viewer: folder tree on the left, rendered preview on the right.")
+st.caption("Knowledge Explorer: browse Experience / Projects / Capabilities with evidence (no raw file structure by default).")
 
 banks = list_banks()
 bank_names = [b.bank_folder_name for b in banks]
@@ -38,127 +37,229 @@ if not bank_dir.exists():
     st.stop()
 
 stats = compute_stats(bank_dir, vec_dir, paths.bank_folder_name)
-
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total files", stats.total_files)
-col2.metric("Markdown files", stats.total_md_files)
+col1.metric("Files", stats.total_files)
+col2.metric("KB pages", stats.total_md_files)
 col3.metric("Vector chunks", stats.total_chunks)
 col4.metric("Evidence claims", stats.total_evidence_claims)
 
-st.write(
-    {
-        "metrics_available": stats.metrics_available,
-        "tools_found_top": stats.tools_found[:20],
-        "supported_domains_top": stats.supported_domains[:20],
-    }
-)
+bank_index = load_bank_index(bank_dir)
+items = list_bank_items(paths.bank_folder_name, data_root=Path(DEFAULT_CONFIG.data_root))
 
-files = list_bank_files(paths.bank_folder_name)
-if not files:
-    st.warning("No previewable files found in this bank.")
-    st.stop()
+work_items = [x for x in items if x.type == "work_experience"]
+project_items = [x for x in items if x.type == "project"]
+cap_items = [x for x in items if x.type == "capability"]
 
-# Build grouped tree for UI
-tree_ui: dict[str, list[dict[str, Any]]] = {}
-for f in files:
-    tree_ui.setdefault(f.folder, []).append(f.__dict__)
-for k in tree_ui:
-    tree_ui[k].sort(key=lambda x: x["path"])
-
-st.session_state.setdefault("bank_preview_selected_path", "")
-st.session_state.setdefault("bank_preview_raw", False)
 st.session_state.setdefault("bank_preview_search", "")
-st.session_state.setdefault("bank_preview_fullscreen", False)
+st.session_state.setdefault("bank_preview_selected_key", "")
 
-left, right = st.columns([1, 2])
 
-with left:
-    st.subheader("Files")
-    st.session_state.bank_preview_search = st.text_input(
-        "Search", value=st.session_state.bank_preview_search, placeholder="Filter files…"
-    )
-    st.session_state.bank_preview_raw = st.checkbox("Raw view", value=st.session_state.bank_preview_raw)
+def _matches_item(q: str, it: BankItemSummary) -> bool:
+    if not q:
+        return True
+    hay = " ".join(
+        [
+            it.title,
+            it.type,
+            it.raw_path,
+            " ".join(it.domains or []),
+            " ".join(it.tools or []),
+            it.date_range or "",
+            it.location or "",
+        ]
+    ).casefold()
+    return q in hay
 
-    query = st.session_state.bank_preview_search.strip().casefold()
 
-    def _matches(item: dict[str, Any]) -> bool:
-        if not query:
-            return True
-        hay = f"{item.get('path','')} {item.get('title','')} {item.get('filename','')}".casefold()
-        return query in hay
+q = st.sidebar.text_input(
+    "Search",
+    value=st.session_state.bank_preview_search,
+    placeholder="Search titles, tools, domains…",
+)
+st.session_state.bank_preview_search = q
+query = q.strip().casefold()
 
-    # Folder-grouped clickable list (tree-like)
-    for folder in [
-        "work_experience",
-        "projects",
-        "capabilities",
-        "deployment",
-        "metrics",
-        "reusable_resume_blocks",
-        "summaries",
-        "metadata",
-    ]:
-        items = [x for x in tree_ui.get(folder, []) if _matches(x)]
-        st.markdown(f"**{folder}/**")
-        if not items:
-            st.caption("(empty)")
-            continue
-        for item in items[:250]:
-            label = item.get("title") or item.get("filename") or item.get("path")
-            secondary = item.get("path")
-            if st.button(label, key=f"filebtn:{paths.bank_folder_name}:{secondary}", use_container_width=True):
-                st.session_state.bank_preview_selected_path = secondary
-            st.caption(secondary)
 
-    if not st.session_state.bank_preview_selected_path:
-        st.session_state.bank_preview_selected_path = files[0].path
+def _sidebar_group(label: str, group_items: list[BankItemSummary]) -> None:
+    with st.sidebar.expander(label, expanded=True):
+        visible = [it for it in group_items if _matches_item(query, it)]
+        if not visible:
+            st.caption("No matches")
+            return
+        for it in visible[:400]:
+            key = f"{it.type}:{it.id}"
+            selected_now = st.session_state.bank_preview_selected_key == key
+            if st.button(
+                it.title,
+                key=f"nav:{paths.bank_folder_name}:{key}",
+                use_container_width=True,
+                type=("primary" if selected_now else "secondary"),
+            ):
+                st.session_state.bank_preview_selected_key = key
+                st.rerun()
+            if it.type == "work_experience" and (it.date_range or it.location):
+                secondary = " · ".join([x for x in [it.date_range, it.location] if x])
+                st.caption(secondary)
 
-with right:
-    sel = st.session_state.bank_preview_selected_path
-    rel_path, title, content = read_bank_file(paths.bank_folder_name, sel)
 
-    head_cols = st.columns([3, 1, 1])
-    head_cols[0].subheader(title)
-    if head_cols[1].button("Copy content"):
-        st.session_state["_copy_buffer"] = content
-        st.toast("Copied to session buffer (use Raw view to copy from code block).")
-    if head_cols[2].button("Full screen"):
-        st.session_state.bank_preview_fullscreen = True
+_sidebar_group("Experience", work_items)
+_sidebar_group("Projects", project_items)
+_sidebar_group("Capabilities", cap_items)
 
-    st.caption(rel_path)
-    def _render() -> None:
-        if st.session_state.bank_preview_raw or not rel_path.endswith(".md"):
-            st.code(content, language="markdown" if rel_path.endswith(".md") else "json")
-        else:
-            st.markdown(content)
-
-    if st.session_state.bank_preview_fullscreen:
-        with st.container(border=True):
-            st.subheader("Full screen preview")
-            if st.button("Close full screen"):
-                st.session_state.bank_preview_fullscreen = False
-            _render()
+if not st.session_state.bank_preview_selected_key:
+    first = (work_items or project_items or cap_items)
+    if first:
+        st.session_state.bank_preview_selected_key = f"{first[0].type}:{first[0].id}"
     else:
-        _render()
+        st.warning("No previewable items found in this bank.")
+        st.stop()
 
-    idx_rows = load_index_jsonl(vec_dir / "index.jsonl")
-    file_abs = str((bank_dir / rel_path).resolve())
-    matching = []
-    for r in idx_rows:
-        md = r.get("metadata")
-        if not isinstance(md, dict):
-            continue
-        if md.get("bank_folder_name") != paths.bank_folder_name:
-            continue
-        if md.get("source_file") == file_abs:
-            matching.append(
-                {
-                    "chunk_id": r.get("chunk_id"),
-                    "title": md.get("title"),
-                    "metrics_available": md.get("metrics_available"),
-                    "evidence_ids": md.get("evidence_ids", []),
-                }
+
+def _find_selected() -> BankItemSummary:
+    key = st.session_state.bank_preview_selected_key
+    for it in items:
+        if f"{it.type}:{it.id}" == key:
+            return it
+    return items[0]
+
+
+sel = _find_selected()
+claim_by_id = {c.evidence_id: c for c in bank_index.evidence_claims}
+
+
+def _evidence_ids_for_item(it: BankItemSummary) -> list[str]:
+    if it.type == "work_experience":
+        w = next((x for x in bank_index.work_experience if x.entry_id == it.id), None)
+        return list(w.evidence_ids or []) if w else []
+    if it.type == "project":
+        p = next((x for x in bank_index.projects if x.project_id == it.id), None)
+        return list(p.evidence_ids or []) if p else []
+    if it.type == "capability":
+        c = next((x for x in bank_index.capabilities if x.capability_id == it.id), None)
+        return list(c.evidence_ids or []) if c else []
+    return []
+
+
+eids = _evidence_ids_for_item(sel)
+
+def _chips(items: list[str], *, limit: int = 16) -> str:
+    xs = [x.strip() for x in (items or []) if isinstance(x, str) and x.strip()]
+    xs = list(dict.fromkeys(xs))[:limit]
+    return " ".join(f"`{x}`" for x in xs)
+
+with st.container(border=True):
+    st.subheader(sel.title)
+    st.caption(f"Type: {sel.type.replace('_', ' ').title()}")
+    meta_line = " · ".join([x for x in [sel.date_range, sel.location] if x])
+    if meta_line:
+        st.caption(meta_line)
+    if sel.domains:
+        st.markdown(f"**Domains:** {_chips(sel.domains)}")
+    if sel.tools:
+        st.markdown(f"**Tools:** {_chips(sel.tools)}")
+
+tabs = st.tabs(["Overview", "Evidence", "Reusable Bullets", "Metadata"])
+
+with tabs[0]:
+    if sel.type == "work_experience":
+        w = next((x for x in bank_index.work_experience if x.entry_id == sel.id), None)
+        if not w:
+            st.info("Work experience entry not found in index.")
+        else:
+            st.markdown("**Overview**")
+            date_range = f"{w.start_date} - {w.end_date}".strip()
+            st.markdown(
+                "\n".join(
+                    [
+                        f"- **Company:** {w.company or 'Unclear from resume'}",
+                        f"- **Role:** {w.role_title or 'Unclear from resume'}",
+                        f"- **Subtitle/domain:** {w.subtitle or 'Unclear from resume'}",
+                        f"- **Employment label:** {w.employment_type_or_label or '—'}",
+                        f"- **Date range:** {date_range if date_range != '-' else 'Unclear from resume'}",
+                        f"- **Location:** {w.location or '—'}",
+                    ]
+                )
             )
-    st.subheader("Metadata")
-    st.write({"chunks_for_file": len(matching)})
-    st.json(matching[:80])
+    elif sel.type == "project":
+        p = next((x for x in bank_index.projects if x.project_id == sel.id), None)
+        if not p:
+            st.info("Project not found in index.")
+        else:
+            st.markdown("**Overview**")
+            if p.description:
+                st.write(p.description)
+            if p.tools:
+                st.markdown(f"**Tools:** {_chips(p.tools)}")
+            if sel.domains:
+                st.markdown(f"**Domains:** {_chips(sel.domains)}")
+    else:
+        c = next((x for x in bank_index.capabilities if x.capability_id == sel.id), None)
+        if not c:
+            st.info("Capability not found in index.")
+        else:
+            st.markdown("**Overview**")
+            st.markdown(f"- **Capability:** {c.name}")
+            if c.domains:
+                st.markdown(f"- **Domains:** {_chips(c.domains)}")
+            if c.tools:
+                st.markdown(f"- **Tools:** {_chips(c.tools)}")
+
+    if not eids:
+        st.info("No evidence linked to this item yet.")
+
+with tabs[1]:
+    st.markdown("**Evidence (from resume)**")
+    if not eids:
+        st.info("No evidence linked to this item.")
+    else:
+        for eid in eids[:400]:
+            c = claim_by_id.get(eid)
+            if not c:
+                st.caption(f"Missing claim for `{eid}`")
+                continue
+            title = c.claim_text.strip() if c.claim_text else "Evidence"
+            with st.container(border=True):
+                st.markdown(title)
+                st.caption(f"{c.source_section} · `{c.evidence_id}`")
+                preview = (c.source_text or "").strip().replace("\n", " ")
+                if len(preview) > 220:
+                    preview = preview[:220] + "…"
+                if preview:
+                    st.write(preview)
+                with st.expander("Show full source text"):
+                    st.code((c.source_text or "").strip(), language="latex")
+                if c.tools:
+                    st.caption("Tools: " + ", ".join(c.tools[:30]))
+                if c.metrics:
+                    st.caption("Metrics: " + ", ".join(c.metrics[:30]))
+                if c.notes:
+                    st.caption("Notes: " + c.notes)
+
+with tabs[2]:
+    st.markdown("**Resume-ready reusable bullets**")
+    candidates = []
+    if bank_index.reusable_bullets and eids:
+        eids_set = set(eids)
+        for b in bank_index.reusable_bullets:
+            if set(b.evidence_ids or []) & eids_set:
+                candidates.append(b)
+    if not candidates:
+        st.info("Reusable bullets will be generated during JD tailoring and must reference evidence IDs.")
+    else:
+        for b in candidates[:200]:
+            cols = st.columns([6, 1])
+            cols[0].code(b.bullet_text, language="text")
+            if cols[1].button("Copy", key=f"copybullet:{paths.bank_folder_name}:{sel.type}:{sel.id}:{b.bullet_id}"):
+                st.session_state["_copy_buffer"] = b.bullet_text
+                st.toast("Copied to session buffer.")
+            if b.evidence_ids:
+                st.caption("Evidence: " + ", ".join(f"`{x}`" for x in b.evidence_ids[:20]))
+
+with tabs[3]:
+    st.markdown("**Metadata (debug/technical)**")
+    st.caption("Raw paths and IDs are shown here only.")
+    st.write({"raw_path": sel.raw_path})
+    st.write({"item": sel.__dict__})
+    st.write({"evidence_ids": eids[:500]})
+    if st.checkbox("Show full bank index JSON (large)", value=False):
+        st.json(bank_index.model_dump())
