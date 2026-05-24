@@ -40,6 +40,7 @@ def run_pipeline(
     llm: OllamaClient,
     cfg: AppConfig = DEFAULT_CONFIG,
     options: PipelineOptions = PipelineOptions(),
+    allowed_tools_and_skills_override: list[str] | None = None,
 ) -> PipelineResult:
     if not jd_text.strip():
         raise ValueError("Job description is empty.")
@@ -65,7 +66,7 @@ def run_pipeline(
     rewrites_used = 0
 
     jd_keywords = jd.important_keywords + jd.required_skills
-    allowed = resume.extracted_skills or resume.extracted_tools
+    allowed = allowed_tools_and_skills_override or (resume.extracted_skills or resume.extracted_tools)
 
     for ch in sorted(plan.changes, key=lambda c: (c.priority, c.bullet_id)):
         b = bullet_by_id.get(ch.bullet_id)

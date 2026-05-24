@@ -31,24 +31,55 @@ This project explicitly separates:
 - **application** (surgical LaTeX rebuilding)
 - **evaluation** (separate LLM evaluator)
 
+## Two-phase product flow
+This system is designed to be used in two phases:
+1. **Experience Bank Creation** (upload master resume once)
+2. **Resume Tailoring from Existing KB** (no resume upload; bank is the source of truth)
+
 ## Core design principle
 - **Resume is the source of truth:** if it is not in the resume, the system does not add it.
 - **JD is only a relevance signal:** it influences *priorities and phrasing*, not factual claims.
 - **LLM is a controlled editor:** it rewrites text, but does not create new evidence.
 - **Validation + human approval:** unsafe changes are rejected; safe changes are still user-approved.
 
-## High-level architecture
-Modules live in `app/` and are orchestrated by `app/pipeline.py`.
+## High-level architecture (two phases)
+The system is split into **two distinct phases**:
 
-Pipeline stages:
-1. **Resume Parser** (`app/parser.py`)
-2. **JD Analyzer** (`app/jd_analyzer.py`) via Ollama
-3. **Evidence Mapper** (`app/evidence_mapper.py`) deterministic
-4. **Rewrite Planner** (`app/planner.py`) via Ollama (JSON-only)
-5. **Safe Rewrite Engine** (`app/rewriter.py`) per bullet via Ollama
-6. **Rule-Based Verifier** (`app/verifier.py`) deterministic checks
-7. **LaTeX Rebuilder** (`app/latex_rebuilder.py`) surgical replacement
-8. **Final Evaluator** (`app/evaluator.py`) via Ollama (separate role)
+### Phase 1 — Experience Bank Creation
+Goal: convert a master resume into an evidence-grounded knowledge base that becomes the source of truth.
+
+Main components:
+- Resume parsing (LaTeX/text)
+- Atomic evidence extraction (claims + source_text)
+- Schema validation (reject unsupported shapes)
+- Deterministic KB writing (markdown + JSON index)
+- Per-bank vector index ingestion
+- Registry update (`banks_registry.json`)
+
+### Phase 2 — Resume Tailoring from Existing KB
+Goal: tailor a resume **without requiring the user to provide the raw resume again**.
+
+Tailoring operates only on:
+- `data/experience_bank/<bank>/...`
+- `data/vector_store/<bank>/...`
+- `banks_registry.json`
+
+Main components:
+- JD parsing into structured requirements
+- Bank-scoped hybrid retrieval
+- Deterministic evidence verification
+- Resume assembly using verified evidence only
+- Hallucination guard (reject unsupported content)
+
+## Experience bank (optional) architecture
+For repeated tailoring across many JDs, this project also supports generating an **EXPERIENCE_BANK**:
+- A per-user/per-resume, evidence-grounded knowledge base derived from a master resume
+- Stored under `data/experience_bank/<bank_folder_name>/`
+- Indexed for retrieval under `data/vector_store/<bank_folder_name>/`
+- Registered in `data/experience_bank/banks_registry.json`
+
+Key principle:
+**EXPERIENCE_BANK is the source of truth** (derived from the uploaded master resume once). Tailoring never reads the upload again.
 
 ## Pipeline flow (conceptual)
 Input:
@@ -183,6 +214,10 @@ The system is conservative:
 Default preference:
 **Keep original content rather than making unsafe edits.**
 
+## Legacy pipeline (kept as fallback)
+The repo still includes an older “edit a provided LaTeX resume” pipeline for experimentation and backwards compatibility.
+The recommended flow is bank-first tailoring, because it avoids repeatedly uploading/parsing resumes and makes evidence constraints explicit.
+
 ## Human-in-the-loop review workflow
 The Streamlit UI is the control panel:
 - Show original and suggested text side-by-side
@@ -197,4 +232,3 @@ The Streamlit UI is the control panel:
 - Add semantic drift detection via embeddings or LLM judge (with deterministic thresholds)
 - Add PDF export (`pdflatex` or `tectonic`)
 - Add ATS parser integration and richer match diagnostics
-

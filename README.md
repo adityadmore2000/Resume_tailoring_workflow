@@ -18,6 +18,7 @@ Core principle:
 - LaTeX rebuilder (surgical replacements; no full regeneration)
 - Separate recruiter-style evaluation stage (local LLM)
 - CLI + Streamlit human-in-the-loop review UI
+- Optional: schema-driven `EXPERIENCE_BANK` generation + per-bank RAG indexing
 
 ## Setup
 1. Install Python dependencies:
@@ -59,15 +60,29 @@ Safety note:
 - By default, **no suggestions are auto-approved**, so `--out` will match your input resume until you approve changes in the UI.
 - If you explicitly want non-interactive application of verifier-passing suggestions, pass `--auto-approve-safe` (not recommended for real use).
 
+Legacy note:
+- `python -m app.main ...` runs the older “edit this LaTeX resume” pipeline (still kept for fallback/testing).
+- The recommended product flow is: **generate an EXPERIENCE_BANK once**, then **tailor from the bank** (no resume upload in tailoring).
+
 ## UI usage (MVP)
 - `streamlit run app/ui.py`
 
 Workflow:
-1. Paste/upload JD + resume
-2. Run pipeline to generate *suggested* changes
-3. Review each suggested change side-by-side
-4. Approve/reject each change
-5. Generate final LaTeX only from approved changes
+1. Create an `EXPERIENCE_BANK` from a master resume (upload once)
+2. Tailor a resume by selecting a bank + providing a JD (no resume upload during tailoring)
+
+## Experience banks (optional)
+Generate an evidence-grounded knowledge base from a master resume (stored per bank folder):
+- Source upload snapshot: `data/uploads/<bank>/resume.tex`
+- Knowledge base: `data/experience_bank/<bank>/...`
+- Per-bank vector store: `data/vector_store/<bank>/index.jsonl`
+- Registry: `data/experience_bank/banks_registry.json`
+
+CLI scripts:
+- Generate: `python scripts/generate_experience_bank.py --resume-path main.tex --bank-folder-name "Aditya AI Master Resume"`
+- List: `python scripts/list_experience_banks.py`
+- Re-ingest vectors: `python scripts/ingest_experience_bank.py --bank-folder-name <bank>`
+- Tailor using a selected bank (no resume input): `python scripts/tailor_resume.py --jd-path <jd.txt> --bank-folder-name <bank> --out outputs/tailored.tex --format latex`
 
 ## Docs
 - `docs/SYSTEM_DESIGN.md`

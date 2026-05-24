@@ -31,5 +31,10 @@ class AppConfig:
         r"\renewcommand",
     )
 
+    # Experience bank + RAG
+    data_root: str = "data"
+    # Prefer a dedicated embedding model. If unavailable, the system falls back to keyword-only retrieval.
+    ollama_embedding_model: str = "nomic-embed-text"
+
 
 DEFAULT_CONFIG = AppConfig()
