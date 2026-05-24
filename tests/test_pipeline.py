@@ -1,40 +1,37 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from app.config import DEFAULT_CONFIG
-from app.llm import OllamaClient
+from app.llm import LLMError
 from app.parser import parse_latex_resume
 from app.pipeline import PipelineOptions, run_pipeline
-from app.schemas import JDAnalysis, RewritePlan
+from app.schemas import EvaluationReport, JDAnalysis, RewritePlan
 
 
-class FakeLLM(OllamaClient):
+class FakeLLM:
     def __init__(self, *, planned_bullet_id: str):
-        super().__init__(base_url="http://fake", model="fake")
         self._planned_bullet_id = planned_bullet_id
 
-    def chat(self, system: str, user: str) -> str:
-        # Route by prompt intent keywords.
-        if "Extract job requirements" in user:
-            return json.dumps(
-                JDAnalysis(
-                    required_skills=["Python"],
-                    preferred_skills=[],
-                    role_focus=["LLM systems"],
-                    important_keywords=["validation"],
-                    low_priority_keywords=[],
-                    experience_signals=[],
-                    deployment_signals=[],
-                    rejection_risks=[],
-                ).model_dump()
+    def generate_text(self, *, system: str, user: str) -> str:  # pragma: no cover
+        return "{}"
+
+    def generate_json(self, *, system: str, user: str, schema, max_retries: int = 1, allow_fallback: bool = True):
+        if schema.__name__ == "JDAnalysis":
+            return JDAnalysis(
+                required_skills=["Python"],
+                preferred_skills=[],
+                role_focus=["LLM systems"],
+                important_keywords=["validation"],
+                low_priority_keywords=[],
+                experience_signals=[],
+                deployment_signals=[],
+                rejection_risks=[],
             )
-        if "You are writing a rewrite plan" in user:
-            return json.dumps(
-                RewritePlan(
-                    changes=[
+        if schema.__name__ == "RewritePlan":
+            return RewritePlan.model_validate(
+                {
+                    "changes": [
                         {
                             "target_type": "bullet",
                             "bullet_id": self._planned_bullet_id,
@@ -43,14 +40,14 @@ class FakeLLM(OllamaClient):
                             "priority": 3,
                         }
                     ],
-                    reorder_bullet_ids=[],
-                    notes=[],
-                ).model_dump()
+                    "reorder_bullet_ids": [],
+                    "notes": [],
+                }
             )
-        if "Rewrite a single resume bullet" in user:
-            return json.dumps({"suggested_latex": "Improved bullet.", "rationale": "clarity"})
-        if "You are an evaluator" in user:
-            return json.dumps(
+        if schema.__name__ == "BulletRewriteOut":
+            return schema.model_validate({"suggested_latex": "Improved bullet.", "rationale": "clarity"})
+        if schema.__name__ == "EvaluationReport":
+            return EvaluationReport.model_validate(
                 {
                     "ats_match_score": 50,
                     "decision": "REJECTED",
@@ -62,7 +59,13 @@ class FakeLLM(OllamaClient):
                     "unnecessary_or_weak_content_remaining": [],
                 }
             )
-        return "{}"
+        raise LLMError(f"Unexpected schema: {schema.__name__}")
+
+    def embed_text(self, text: str) -> list[float]:  # pragma: no cover
+        raise LLMError("not used")
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:  # pragma: no cover
+        raise LLMError("not used")
 
 
 def test_pipeline_runs_without_ollama_by_stubbing_llm():

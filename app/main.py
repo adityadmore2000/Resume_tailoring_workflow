@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 # Allow running via `python app/main.py` (when `app/` is sys.path[0]).
@@ -12,7 +13,8 @@ if str(_ROOT) not in sys.path:
 
 from app.config import DEFAULT_CONFIG
 from app.latex_rebuilder import rebuild_latex
-from app.llm import LLMError, OllamaClient
+from app.llm import LLMError
+from app.llm.factory import build_llm_provider
 from app.parser import parse_latex_resume
 from app.pipeline import PipelineOptions, run_pipeline
 from app.schemas import SuggestionStatus
@@ -52,7 +54,13 @@ def main() -> int:
     resume_tex = _read_text(resume_path)
     jd_text = _read_text(jd_path)
 
-    llm = OllamaClient(base_url=args.ollama_url, model=args.model)
+    cfg = DEFAULT_CONFIG
+    if cfg.llm_provider == "ollama":
+        cfg = replace(cfg, ollama_base_url=args.ollama_url, ollama_model=args.model)
+    try:
+        llm = build_llm_provider(cfg)
+    except LLMError as e:
+        raise SystemExit(f"LLM config error: {e}")
     options = PipelineOptions(run_evaluator=not args.no_eval)
 
     try:

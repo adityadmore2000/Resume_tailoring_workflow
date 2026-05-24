@@ -1,4 +1,4 @@
-# System Design: Controlled Local-LLM Resume Tailoring
+# System Design: Evidence-Grounded Resume KB + Tailoring
 
 ## What problem this solves
 Tailoring a resume for different job descriptions often requires repeated manual edits: rephrasing bullets, emphasizing the most relevant experience, and removing low-signal content. The risky part is that typical “AI resume rewriters” can:
@@ -8,7 +8,7 @@ Tailoring a resume for different job descriptions often requires repeated manual
 - spam keywords and hurt readability
 - rewrite random sections you did not intend to change
 
-This system is built to solve that problem **safely** by treating the LLM as a **controlled editor** inside a deterministic pipeline.
+This system is built to solve that problem **safely** by turning your master resume into an **evidence-grounded knowledge base** first, and then tailoring from that KB using deterministic constraints (not free-form rewriting).
 
 ## Project motivation
 The motivation is two-fold:
@@ -23,52 +23,74 @@ One large prompt tends to blend planning, editing, and evaluation into a single 
 - safely preserve formatting and template structure
 
 This project explicitly separates:
-- **extraction** (JD analyzer)
-- **grounding** (evidence mapper)
-- **planning** (rewrite planner → JSON only)
-- **editing** (safe rewrite engine per-bullet)
-- **verification** (deterministic checks)
-- **application** (surgical LaTeX rebuilding)
-- **evaluation** (separate LLM evaluator)
+- **bank creation** (resume → evidence claims → validated KB → vector index)
+- **retrieval** (bank-scoped hybrid retrieval)
+- **verification** (deterministic evidence verifier)
+- **assembly** (deterministic resume assembler)
+- **review + export** (browser LaTeX workspace + PDF compile)
+
+## Two-phase product flow
+This system is designed to be used in two phases:
+1. **Experience Bank Creation** (upload master resume once)
+2. **Resume Tailoring from Existing KB** (no resume upload; bank is the source of truth)
 
 ## Core design principle
-- **Resume is the source of truth:** if it is not in the resume, the system does not add it.
-- **JD is only a relevance signal:** it influences *priorities and phrasing*, not factual claims.
-- **LLM is a controlled editor:** it rewrites text, but does not create new evidence.
-- **Validation + human approval:** unsafe changes are rejected; safe changes are still user-approved.
+- **Master resume → Experience Bank is the source of truth:** if it is not present in the bank evidence, the system does not add it.
+- **JD is only a relevance signal:** it influences ranking/selection and light formatting, not factual claims.
+- **Retrieval can be noisy; generation must not be:** retrieved chunks are verified deterministically before use.
+- **Prefer safety over “helpfulness”:** when uncertain, keep content unchanged or omit optional sections (never invent).
 
-## High-level architecture
-Modules live in `app/` and are orchestrated by `app/pipeline.py`.
+## High-level architecture (two phases)
+The system is split into **two distinct phases**:
 
-Pipeline stages:
-1. **Resume Parser** (`app/parser.py`)
-2. **JD Analyzer** (`app/jd_analyzer.py`) via Ollama
-3. **Evidence Mapper** (`app/evidence_mapper.py`) deterministic
-4. **Rewrite Planner** (`app/planner.py`) via Ollama (JSON-only)
-5. **Safe Rewrite Engine** (`app/rewriter.py`) per bullet via Ollama
-6. **Rule-Based Verifier** (`app/verifier.py`) deterministic checks
-7. **LaTeX Rebuilder** (`app/latex_rebuilder.py`) surgical replacement
-8. **Final Evaluator** (`app/evaluator.py`) via Ollama (separate role)
+### Phase 1 — Experience Bank Creation
+Goal: convert a master resume into an evidence-grounded knowledge base that becomes the source of truth.
 
-## Pipeline flow (conceptual)
-Input:
-- JD text
-- Master resume LaTeX
+Main components:
+- Resume parsing (LaTeX/text) → bullets + spans
+- Atomic evidence extraction (`evidence_id`, `source_text`, `source_section`)
+- Work/project grouping extraction (from LaTeX macros when available)
+- Schema validation (reject unsupported shapes; enforce evidence references)
+- Deterministic KB writing (markdown + JSON index)
+- Per-bank vector index ingestion (RAG)
+- Registry update (`banks_registry.json`)
 
-Intermediate artifacts:
-- `ParsedResume` (structured bullets + spans)
-- `JDAnalysis` (structured requirements)
-- `EvidenceMap` (matches grounded in resume)
-- `RewritePlan` (what to rewrite/remove/keep)
-- `ChangeReport` (suggestions + validation flags)
+### Phase 2 — Resume Tailoring from Existing KB
+Goal: tailor a resume **without requiring the user to provide the raw resume again**.
 
-Output:
-- Tailored LaTeX resume (only after approvals)
-- Change report
-- Recruiter-style evaluation report
+Tailoring operates only on:
+- `data/experience_bank/<bank>/...`
+- `data/vector_store/<bank>/...`
+- `banks_registry.json`
+
+Main components:
+- JD parsing into structured requirements (LLM extractor)
+- Bank-scoped hybrid retrieval (vector index + keyword fallback)
+- Deterministic evidence verification (`supported/partially_supported/unsupported`)
+- Resume assembly using verified evidence IDs only
+- Skills categorization (recruiter-friendly categories; evidence-grounded)
+- LaTeX structure preflight validation + safe auto-fix (pre-compile)
+- Browser-based LaTeX workspace (edit → compile → preview → export PDF)
+
+## Experience bank (optional) architecture
+For repeated tailoring across many JDs, this project also supports generating an **EXPERIENCE_BANK**:
+- A per-user/per-resume, evidence-grounded knowledge base derived from a master resume
+- Stored under `data/experience_bank/<bank_folder_name>/`
+- Indexed for retrieval under `data/vector_store/<bank_folder_name>/`
+- Registered in `data/experience_bank/banks_registry.json`
+
+Key principle:
+**EXPERIENCE_BANK is the source of truth** (derived from the uploaded master resume once). Tailoring never reads the upload again.
+
+## Pipeline flow (current UI)
+Phase 1:
+Upload master resume → parse → extract evidence → validate → write bank → ingest vectors → registry update
+
+Phase 2:
+Select bank → paste/upload JD → retrieve → verify → assemble LaTeX/Markdown/Text → save `resume_id` → open LaTeX workspace (PDF preview + export)
 
 ## Module responsibilities
-### 1) Resume Parser
+### 1) Resume parsing
 Responsibility:
 - Parse LaTeX into a structured form (sections + bullets).
 - Assign stable bullet IDs.
@@ -78,123 +100,109 @@ Responsibility:
 Key safety choice:
 - The LLM never sees or edits the full LaTeX document as a single blob to “regenerate”.
 
-### 2) JD Analyzer (LLM)
+### 2) JD analyzer (LLM extractor)
 Responsibility:
 - Convert JD text into structured JSON: skills, focus areas, keywords, rejection risks.
 
 Key safety choice:
 - The analyzer is an extractor. It does not claim anything about the candidate.
 
-### 3) Evidence Mapper (deterministic)
+### 3) Bank-scoped retrieval (RAG)
 Responsibility:
-- Map JD requirements only to evidence that already exists in the resume.
-- Mark each requirement as `strong_match`, `partial_match`, or `missing`.
+- Retrieve potentially relevant KB chunks, scoped to the selected bank only.
 
 Key safety choice:
-- Missing evidence is reported as missing; it is not added.
+- Retrieval is scoped per bank folder to prevent cross-bank contamination.
 
-### 4) Rewrite Planner (LLM, JSON-only)
+### 4) Evidence verification (deterministic)
 Responsibility:
-- Decide which bullets should be kept/rewritten/removed and why.
-- Output JSON only. No rewriting here.
+ - Classify whether retrieved evidence supports each JD requirement.
 
 Key safety choice:
-- Separating planning from rewriting prevents the model from “helpfully” inventing content while deciding priorities.
+ - Missing evidence stays missing; it is not invented.
 
-### 5) Safe Rewrite Engine (LLM, per bullet)
+### 5) Resume assembly (deterministic)
 Responsibility:
-- Rewrite only a single bullet at a time based on the plan.
-- Respect constraints (no new tools/metrics/deployments).
+- Assemble a tailored resume with a fixed top-level order:
+  `HEADER → SUMMARY → EXPERIENCE → PROJECTS → SKILLS → EDUCATION`
+- EXPERIENCE completeness is enforced (do not drop work entries).
+- Bullets are selected from verified evidence; if none match for a company, fall back to safe bullets from that entry.
 
 Key safety choice:
-- Small input scope reduces accidental template damage and makes validation easier.
+- “No evidence_id = no bullet.”
 
-### 6) Rule-Based Verifier (deterministic)
+### 6) LaTeX structure guard + compilation
 Responsibility:
-- Block risky edits:
-  - tool hallucinations
-  - fake metrics
-  - LaTeX safety issues
-  - keyword stuffing
-  - overlong bullets
-- Optionally warn on semantic drift (non-blocking warning by default).
+- Validate list/macro wrappers before compilation.
+- Apply safe end-of-document auto-fixes if possible and log them.
+- Compile in an isolated resume workspace directory (`latexmk` preferred; `pdflatex` fallback).
 
 Key safety choice:
-- The verifier is deterministic Python, not an LLM.
+- No user-supplied shell commands; no shell escape; timeouts.
 
-### 7) LaTeX Rebuilder
+### 7) Browser review workspace
 Responsibility:
-- Apply approved edits by replacing only known text spans.
-- Preserve formatting, structure, and template.
+- Provide a split view editor + PDF preview.
+- Allow recompile, export PDF, and view artifacts (Markdown/Text/Traceability/Logs).
 
 Key safety choice:
-- Never regenerate the entire LaTeX file; only replace the bullet content spans.
-
-### 8) Final Evaluator (LLM)
-Responsibility:
-- Provide a recruiter-style evaluation (ATS score, decision, strengths/weaknesses).
-
-Key safety choice:
-- Evaluator is separate from the editor to reduce self-justifying bias.
+- Compilation errors never clear the editor content and never delete the last successful PDF.
 
 ## How hallucinations are prevented
-- Evidence mapping never invents evidence.
-- Rewrite engine is constrained by allowed tools/skills extracted from the resume.
-- Verifier rejects tool-like additions not supported by the extracted lists.
-- Human review UI shows every change side-by-side.
+- The KB is extracted from explicit resume text only.
+- Tailoring uses only evidence claims with `evidence_id` + `source_text`.
+- Retrieved evidence is deterministically verified before use.
+- Traceability is stored alongside each generated resume (`traceability.json`).
 
 ## How fake metrics are prevented
-- Verifier blocks newly introduced numbers/percentages not present in the original bullet.
-- Rewrite prompt explicitly bans new metrics.
+- Metrics are extracted only when explicitly present in the resume text.
+- Assembly selects existing evidence claims; it does not invent new numbers.
 
 ## How LaTeX formatting is protected
-- LLM edits are limited to bullet content spans (not document structure).
-- Verifier checks for unbalanced braces and forbidden commands.
-- Rebuilder applies surgical replacements only.
+- Bank stores template snapshots (preamble + header) derived from the master resume.
+- Assembler uses deterministic wrappers for experience/project item lists.
+- Preflight validator prevents unclosed list environments from reaching compilation.
 
 ## How keyword stuffing is reduced
-- Verifier detects high keyword density and excessive repetition.
-- Prompts prefer clarity over buzzwords.
+- Skills are grouped into recruiter-friendly categories (no “Relevant/Misc/Other” buckets).
+- Selection is driven by verified evidence, not uncontrolled keyword injection.
 
 ## How random section modifications are avoided
-- Only bullets in the plan are eligible for rewriting.
-- Rebuilder replaces only the spans that correspond to those bullets.
+- Top-level section order is fixed and validated.
+- Work experience entries are never dropped (only bullet selection changes).
 
 ## Where local LLMs are used vs deterministic Python
 Used local LLM (Ollama) for:
 - JD analysis (structured extraction)
-- rewrite planning (JSON-only decisions)
-- bullet rewriting (editor role)
-- final evaluation (recruiter role)
 
 Used deterministic Python for:
 - LaTeX parsing
-- evidence mapping
-- validation and safety checks
-- LaTeX rebuilding
-- UI approval gating
+- bank writing + schema validation
+- retrieval scoping + evidence verification
+- deterministic resume assembly + skills categorization
+- LaTeX structure validation + safe compilation
+- artifact persistence + preview UI
 
 ## Failure handling strategy
 The system is conservative:
-- If any rewrite fails validation → reject rewrite → keep original bullet → record reason.
-- If planner fails → fallback heuristic planner (optional).
-- If evaluator fails → keep tailoring artifacts and UI still works.
+- If retrieval returns weak/no evidence → fall back to safe per-entry bullets (still evidence-backed).
+- If compilation fails → keep last successful PDF preview (if any), keep editor content, show logs.
 
 Default preference:
 **Keep original content rather than making unsafe edits.**
 
-## Human-in-the-loop review workflow
-The Streamlit UI is the control panel:
-- Show original and suggested text side-by-side
-- Show reasons + validation flags
-- Block rejected suggestions
-- Require explicit approval for each change
-- Only apply approved changes
+## Legacy pipeline (kept as fallback)
+The repo still contains the earlier “rewrite planner / safe rewriter / verifier / LaTeX rebuilder” pipeline in `app/pipeline.py` for experimentation/back-compat.
+The recommended product flow is bank-first tailoring + deterministic assembly.
+
+## Human review workflow
+The Streamlit UI ends in an editable LaTeX workspace:
+- Edit LaTeX, recompile, preview PDF, export PDF
+- View Markdown/Text artifacts and evidence traceability
+This keeps final control with the user while preserving evidence constraints.
 
 ## Future upgrade path
 - Add LangGraph as an orchestration wrapper (without moving business logic into it)
 - Improve review UI (diff view, grouping by section, bulk actions)
 - Add semantic drift detection via embeddings or LLM judge (with deterministic thresholds)
-- Add PDF export (`pdflatex` or `tectonic`)
 - Add ATS parser integration and richer match diagnostics
-

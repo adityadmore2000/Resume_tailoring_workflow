@@ -7,7 +7,7 @@ from app.evidence_mapper import map_evidence
 from app.evaluator import evaluate_tailored_resume
 from app.jd_analyzer import analyze_jd
 from app.latex_rebuilder import rebuild_latex
-from app.llm import LLMError, OllamaClient
+from app.llm import LLMError, LLMProvider
 from app.parser import parse_latex_resume
 from app.planner import heuristic_plan, plan_rewrites
 from app.rewriter import rewrite_bullet
@@ -37,9 +37,10 @@ def run_pipeline(
     *,
     jd_text: str,
     resume_tex: str,
-    llm: OllamaClient,
+    llm: LLMProvider,
     cfg: AppConfig = DEFAULT_CONFIG,
     options: PipelineOptions = PipelineOptions(),
+    allowed_tools_and_skills_override: list[str] | None = None,
 ) -> PipelineResult:
     if not jd_text.strip():
         raise ValueError("Job description is empty.")
@@ -65,7 +66,7 @@ def run_pipeline(
     rewrites_used = 0
 
     jd_keywords = jd.important_keywords + jd.required_skills
-    allowed = resume.extracted_skills or resume.extracted_tools
+    allowed = allowed_tools_and_skills_override or (resume.extracted_skills or resume.extracted_tools)
 
     for ch in sorted(plan.changes, key=lambda c: (c.priority, c.bullet_id)):
         b = bullet_by_id.get(ch.bullet_id)
