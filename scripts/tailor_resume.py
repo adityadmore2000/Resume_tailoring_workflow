@@ -50,7 +50,7 @@ def main() -> int:
         retrieved_eids = [e.evidence_id for e in bank_index.evidence_claims[:50]]
 
     verified, evidence_map = verify_retrieved_evidence(jd=jd_struct, bank_index=bank_index, retrieved_evidence_ids=retrieved_eids)
-    assembled = assemble_from_bank(bank_dir=paths.experience_bank_dir, bank_index=bank_index, verified_evidence=verified)
+    assembled = assemble_from_bank(bank_dir=paths.experience_bank_dir, bank_index=bank_index, verified_evidence=verified, jd=jd_struct)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

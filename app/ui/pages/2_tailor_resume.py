@@ -82,7 +82,12 @@ if run:
         st.json(evidence_map.model_dump())
 
         st.write("Resume assembly (evidence-grounded)")
-        assembled = assemble_from_bank(bank_dir=paths.experience_bank_dir, bank_index=bank_index, verified_evidence=verified)
+        assembled = assemble_from_bank(
+            bank_dir=paths.experience_bank_dir,
+            bank_index=bank_index,
+            verified_evidence=verified,
+            jd=jd_struct,
+        )
         if assembled.messages:
             for m in assembled.messages:
                 st.info(m)

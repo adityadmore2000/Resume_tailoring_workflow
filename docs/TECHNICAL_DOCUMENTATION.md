@@ -190,6 +190,20 @@ The bank generator behaves like an evidence-grounded knowledge-base builder (not
 8. Ingest markdown into per-bank vector store (`index.jsonl`)
 9. Update `banks_registry.json`
 
+### Tailored resume output structure (deterministic)
+The KB-based assembler enforces a fixed, recruiter/ATS-stable LaTeX layout:
+`HEADER (unchanged from bank template) → EXPERIENCE → PROJECTS → SKILLS → EDUCATION (unchanged snapshot)`
+
+Implementation:
+- `app/tailoring/resume_assembler.py`
+
+How “unchanged” works:
+- The bank stores a template snapshot derived from the uploaded master resume:
+  - `data/experience_bank/<bank>/metadata/template_preamble.tex`
+  - `data/experience_bank/<bank>/metadata/template_body_header.tex` (the header block before the first `\\section`)
+  - `data/experience_bank/<bank>/metadata/education_section.tex` (education section, without `\\end{document}`)
+- Tailoring never reads from `data/uploads/...`; it only uses the stored bank snapshot.
+
 ## LLM prompt contracts
 Prompts are stored in `app/prompts.py`.
 

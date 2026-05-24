@@ -116,6 +116,17 @@ def generate_experience_bank(
         parsed = parse_latex_resume(resume_tex).parsed_resume
         messages.extend(parsed.warnings)
 
+    # Persist unchanged EDUCATION block for deterministic final layout.
+    if source_format != "text":
+        edu_sections = [s for s in parsed.sections if s.name.value.casefold() == "education"]
+        if edu_sections:
+            edu_raw = edu_sections[0].raw_text
+            if "\\end{document}" in edu_raw:
+                edu_raw = edu_raw.split("\\end{document}", 1)[0].rstrip() + "\n"
+            (paths.experience_bank_dir / "metadata" / "education_section.tex").write_text(edu_raw, encoding="utf-8")
+        else:
+            messages.append("EDUCATION section not found; final resume will omit education unless added later.")
+
     # Build structured bank index (schema-driven, evidence-grounded)
     index = build_experience_bank_index(parsed, bank_folder_name=paths.bank_folder_name, source_format=source_format)
     index = map_capabilities_from_resume(index, extracted_skills=parsed.extracted_skills)

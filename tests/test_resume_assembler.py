@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.bank_generator.schemas import ExperienceBankIndex, AtomicEvidenceClaim
+from app.bank_generator.schemas import ExperienceBankIndex, AtomicEvidenceClaim, WorkExperienceEntry
 from app.tailoring.evidence_verifier import VerifiedEvidence
+from app.schemas import JDAnalysis
 from app.tailoring.resume_assembler import assemble_from_bank
 
 
@@ -24,7 +25,16 @@ def test_assembler_uses_only_evidence_and_records_ids(tmp_path: Path):
                 source_text="Built a validation pipeline in Python.",
             )
         ],
-        work_experience=[],
+        work_experience=[
+            WorkExperienceEntry(
+                entry_id="work_1",
+                company="Example Co",
+                title="Engineer",
+                date_range="2024-2025",
+                location="Remote",
+                evidence_ids=["ev_aaaaaaaaaaaa"],
+            )
+        ],
         projects=[],
         capabilities=[],
         deployments=[],
@@ -40,7 +50,9 @@ def test_assembler_uses_only_evidence_and_records_ids(tmp_path: Path):
             source_text="Built a validation pipeline in Python.",
         )
     ]
-    assembled = assemble_from_bank(bank_dir=bank_dir, bank_index=bank, verified_evidence=verified, max_bullets=5)
+    jd = JDAnalysis(required_skills=["Python"])
+    assembled = assemble_from_bank(bank_dir=bank_dir, bank_index=bank, verified_evidence=verified, jd=jd)
     assert "Built a validation pipeline in Python" in assembled.latex
     assert assembled.used_evidence_ids == ["ev_aaaaaaaaaaaa"]
-
+    # Deterministic section order
+    assert assembled.latex.find("\\section{EXPERIENCE}") < assembled.latex.find("\\section{PROJECTS}") < assembled.latex.find("\\section{SKILLS}")

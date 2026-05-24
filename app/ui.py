@@ -35,6 +35,7 @@ if not _CREATE.exists() or not _TAILOR.exists():
 
 create_bank = st.Page(str(_CREATE), title="Create Experience Bank", icon="🧱")
 tailor = st.Page(str(_TAILOR), title="Tailor Resume", icon="✍️")
+preview = st.Page(str(_PAGES_DIR / "3_preview_experience_bank.py"), title="Preview Experience Bank", icon="🔎")
 
-nav = st.navigation([create_bank, tailor])
+nav = st.navigation([create_bank, tailor, preview])
 nav.run()
