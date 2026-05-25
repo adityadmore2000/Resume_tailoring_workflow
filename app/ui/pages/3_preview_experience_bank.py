@@ -15,14 +15,60 @@ from app.config import DEFAULT_CONFIG  # noqa: E402
 from app.tailoring.resume_assembler import load_bank_index  # noqa: E402
 from app.ui.api.bank_preview_api import compute_stats  # noqa: E402
 from app.ui.api.experience_banks_api import BankItemSummary, list_bank_items  # noqa: E402
+from app.ui.components.top_nav import render_top_nav  # noqa: E402
 
 
 st.title("Preview Experience Bank")
-st.caption("Knowledge Explorer: browse Experience / Projects / Capabilities with evidence (no raw file structure by default).")
+st.caption("Step 2 of 4 — Review extracted experience, projects, and evidence before tailoring.")
+render_top_nav(active="Preview Experience Bank")
+
+with st.container(border=True):
+    st.subheader("Step 2 of 4 — Review Experience Bank")
+    st.markdown(
+        "\n".join(
+            [
+                "Review extracted capabilities, projects, and evidence in a **human-readable** view.",
+                "",
+                "**Recommended next step:** open Tailor Resume after you've confirmed the content looks accurate.",
+            ]
+        )
+    )
+    with st.expander("How this works"):
+        st.markdown(
+            "\n".join(
+                [
+                    "- The left navigation groups items into Experience / Projects / Capabilities.",
+                    "- The center panel shows recruiter-facing content and linked evidence.",
+                    "- Technical metadata stays collapsed by default to keep the review focused.",
+                ]
+            )
+        )
 
 banks = list_banks()
 bank_names = [b.bank_folder_name for b in banks]
-selected = st.selectbox("Select bank_folder_name", options=[""] + bank_names, index=0)
+if not bank_names:
+    st.selectbox(
+        "Experience Bank",
+        options=[],
+        index=None,
+        placeholder="No Experience Banks found",
+        disabled=True,
+    )
+    st.page_link(
+        "ui/pages/1_create_experience_bank.py",
+        label="Create Experience Bank",
+        icon="🧱",
+        use_container_width=True,
+    )
+    st.stop()
+
+selected = st.selectbox(
+    "Experience Bank",
+    options=bank_names,
+    index=None,
+    placeholder="Select an Experience Bank",
+    help="Choose the bank you want to review. This view is designed to be human-readable first, technical second.",
+)
 
 if not selected:
     st.info("Select a bank to preview.")
@@ -158,7 +204,7 @@ with st.container(border=True):
     if sel.tools:
         st.markdown(f"**Tools:** {_chips(sel.tools)}")
 
-tabs = st.tabs(["Overview", "Evidence", "Reusable Bullets", "Metadata"])
+tabs = st.tabs(["Overview", "Evidence", "Resume Bullets", "Technical Metadata"])
 
 with tabs[0]:
     if sel.type == "work_experience":
@@ -236,7 +282,7 @@ with tabs[1]:
                     st.caption("Notes: " + c.notes)
 
 with tabs[2]:
-    st.markdown("**Resume-ready reusable bullets**")
+    st.markdown("**Resume-ready bullets**")
     candidates = []
     if bank_index.reusable_bullets and eids:
         eids_set = set(eids)
@@ -256,8 +302,8 @@ with tabs[2]:
                 st.caption("Evidence: " + ", ".join(f"`{x}`" for x in b.evidence_ids[:20]))
 
 with tabs[3]:
-    st.markdown("**Metadata (debug/technical)**")
-    st.caption("Raw paths and IDs are shown here only.")
+    st.markdown("**Technical metadata (debug)**")
+    st.caption("Hidden by default during normal review. Use this only when debugging traceability/indexing.")
     st.write({"raw_path": sel.raw_path})
     st.write({"item": sel.__dict__})
     st.write({"evidence_ids": eids[:500]})

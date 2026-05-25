@@ -23,12 +23,14 @@ from app.tailoring.resume_assembler import assemble_from_bank, load_bank_index  
 from app.ui.api.banks_api import get_bank_options  # noqa: E402
 from app.generated_resumes.resume_store import init_generated_resume, new_resume_id  # noqa: E402
 from app.generated_resumes.latex_compiler import LatexCompileError, compile_resume_latex  # noqa: E402
+from app.ui.components.top_nav import render_top_nav  # noqa: E402
 
 
-st.title("Tailor Resume (from Experience Bank)")
-st.caption("No resume upload here. Tailoring uses only the selected bank’s KB + vector store.")
+st.title("Tailor Resume")
+st.caption("Step 3 of 4 — Select an Experience Bank + provide a Job Description to generate an evidence-grounded resume.")
+render_top_nav(active="Tailor Resume")
 
-st.session_state.setdefault("tailor_selected_bank", "")
+st.session_state.setdefault("tailor_selected_bank", None)
 st.session_state.setdefault("tailor_jd_text", "")
 st.session_state.setdefault("tailor_last_error", "")
 st.session_state.setdefault("tailor_last_resume_id", "")
@@ -36,8 +38,33 @@ st.session_state.setdefault("tailor_last_resume_id", "")
 banks = list_banks()
 bank_names = get_bank_options()
 
+with st.container(border=True):
+    st.subheader("Step 3 of 4 — Tailor Resume")
+    st.markdown(
+        "\n".join(
+            [
+                "Select an **Experience Bank** and provide a **Job Description**. The system retrieves only **verified evidence** relevant to the role.",
+                "",
+                "**Key constraints**",
+                "- Unsupported skills/tools are **not** added automatically.",
+                "- Resume uploads are **not required** during tailoring (banks are the source of truth).",
+            ]
+        )
+    )
+    with st.expander("How this works"):
+        st.markdown(
+            "\n".join(
+                [
+                    "1. The Job Description is parsed into structured requirements.",
+                    "2. The system retrieves semantically relevant chunks from your selected Experience Bank.",
+                    "3. Evidence claims are verified deterministically.",
+                    "4. Only verified evidence is assembled into recruiter-facing bullets + LaTeX.",
+                ]
+            )
+        )
+
 col_actions = st.columns([1, 1, 3])
-clear_clicked = col_actions[0].button("Clear", use_container_width=True)
+clear_clicked = col_actions[0].button("Clear Form", use_container_width=True, help="Resets inputs only. Does not delete generated resumes/artifacts.")
 if clear_clicked:
     # Reset UI state only; never delete generated artifacts.
     for k in [
@@ -50,26 +77,64 @@ if clear_clicked:
     ]:
         if k in st.session_state:
             del st.session_state[k]
-    st.session_state["tailor_selected_bank"] = ""
+    st.session_state["tailor_selected_bank"] = None
     st.session_state["tailor_jd_text"] = ""
     st.toast("Cleared form state")
     st.rerun()
 
-selected = st.selectbox("Select bank", options=[""] + bank_names, key="tailor_selected_bank", index=0)
+if not bank_names:
+    st.selectbox(
+        "Experience Bank",
+        options=[],
+        index=None,
+        placeholder="No Experience Banks found",
+        disabled=True,
+        key="tailor_selected_bank",
+    )
+    st.page_link(
+        "ui/pages/1_create_experience_bank.py",
+        label="Create Experience Bank",
+        icon="🧱",
+        use_container_width=True,
+    )
+    st.stop()
+
+selected = st.selectbox(
+    "Experience Bank",
+    options=bank_names,
+    index=None,
+    placeholder="Select an Experience Bank",
+    key="tailor_selected_bank",
+    help="Choose the bank you want to retrieve evidence from. Tailoring does not read your resume file again.",
+)
+st.popover("What is an Experience Bank?").markdown(
+    "An Experience Bank is a reusable knowledge base extracted from your master resume. Tailoring uses it as the source of truth, so you don't re-upload resumes for every job."
+)
+
 if selected:
     meta = next((b for b in banks if b.bank_folder_name == selected), None)
     if meta:
-        st.json(meta.model_dump())
+        with st.expander("Bank details (technical)"):
+            st.json(meta.model_dump())
 
-jd_upload = st.file_uploader("Upload Job Description (.txt/.md)", type=["txt", "md"], key="tailor_jd_upload")
+jd_upload = st.file_uploader(
+    "Upload Job Description (.txt/.md)",
+    type=["txt", "md"],
+    key="tailor_jd_upload",
+    help="Optional. You can also paste the JD below.",
+)
 if jd_upload is not None:
     st.session_state["tailor_jd_text"] = jd_upload.read().decode("utf-8", errors="replace")
 jd_text = st.text_area("Or paste JD", key="tailor_jd_text", height=240)
+st.caption("Hint: Keep the JD specific. The retriever uses it to find evidence-backed experience to include (and exclude).")
 
 run = st.button("Tailor using selected bank", type="primary", use_container_width=True)
+st.popover("Why was this skill excluded?").markdown(
+    "Tailoring only includes skills/tools supported by verified evidence in your Experience Bank. If a tool isn't present in your evidence claims, it won't be added automatically."
+)
 st.page_link(
     "ui/pages/4_resume_latex_preview.py",
-    label="Open Resume LaTeX Preview",
+    label="Open Resume Workspace",
     icon="🧾",
     use_container_width=True,
     disabled=not bool(st.session_state.get("resume_id")),

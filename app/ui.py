@@ -39,20 +39,25 @@ else:
     st.sidebar.caption("Keys are read from environment variables only (not shown in UI).")
 
 _PAGES_DIR = Path(__file__).resolve().parent / "ui" / "pages"
+_LANDING = _PAGES_DIR / "0_landing.py"
 _CREATE = _PAGES_DIR / "1_create_experience_bank.py"
 _TAILOR = _PAGES_DIR / "2_tailor_resume.py"
 _PREVIEW = _PAGES_DIR / "3_preview_experience_bank.py"
 _LATEX_WS = _PAGES_DIR / "4_resume_latex_preview.py"
+_DOCS = _PAGES_DIR / "5_docs.py"
 if not _CREATE.exists() or not _TAILOR.exists():
     st.error("UI pages not found. Expected files under `app/ui/pages/`.")
     st.code(str(_CREATE))
     st.code(str(_TAILOR))
     st.stop()
 
+landing = st.Page(str(_LANDING), title="Home", icon="🏠") if _LANDING.exists() else None
 create_bank = st.Page(str(_CREATE), title="Create Experience Bank", icon="🧱")
 tailor = st.Page(str(_TAILOR), title="Tailor Resume", icon="✍️")
 preview = st.Page(str(_PREVIEW), title="Preview Experience Bank", icon="🔎")
-latex_ws = st.Page(str(_LATEX_WS), title="Resume LaTeX Preview", icon="🧾")
+latex_ws = st.Page(str(_LATEX_WS), title="Resume Workspace", icon="🧾")
+docs = st.Page(str(_DOCS), title="Docs", icon="📚") if _DOCS.exists() else None
 
-nav = st.navigation([create_bank, tailor, preview, latex_ws])
+pages = [p for p in [landing, create_bank, preview, tailor, latex_ws, docs] if p is not None]
+nav = st.navigation(pages)
 nav.run()

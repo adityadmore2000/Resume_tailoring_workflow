@@ -23,10 +23,37 @@ from app.generated_resumes.resume_store import (  # noqa: E402
     read_traceability,
     save_latex,
 )
+from app.ui.components.top_nav import render_top_nav  # noqa: E402
 
 
-st.title("Resume LaTeX Preview")
-st.caption("Edit LaTeX in-browser, compile to PDF, preview, and export.")
+st.title("Resume Workspace")
+st.caption("Step 4 of 4 — Review, edit LaTeX, recompile, and export a recruiter-ready PDF.")
+render_top_nav(active="Resume Workspace")
+
+with st.container(border=True):
+    st.subheader("Step 4 of 4 — Review & Export")
+    st.markdown(
+        "\n".join(
+            [
+                "Edit LaTeX, review traceability, recompile PDF, and export the final recruiter-ready resume.",
+                "",
+                "**What to know**",
+                "- **PDF Preview** is read-only.",
+                "- **LaTeX Source** is editable and recompilable.",
+                "- **Traceability** maps generated bullets back to source evidence so you can audit edits confidently.",
+            ]
+        )
+    )
+    with st.expander("How this works"):
+        st.markdown(
+            "\n".join(
+                [
+                    "1. The workspace loads a previously generated `resume_id`.",
+                    "2. You edit LaTeX, then recompile to update the PDF preview.",
+                    "3. Traceability stays available as an audit trail from bullets → evidence claims.",
+                ]
+            )
+        )
 
 
 def _pdf_iframe(pdf_bytes: bytes, *, height: int = 900) -> None:
@@ -69,12 +96,12 @@ if paths is None:
     st.info("No resume_id provided. Generate a tailored resume first (Tailor Resume page).")
     st.stop()
 
-st.sidebar.subheader("Resume Context")
-st.sidebar.write({"bank_folder_name": paths.bank_folder_name, "resume_id": paths.resume_id})
-meta = read_metadata(paths)
-if meta:
-    st.sidebar.caption("Metadata")
-    st.sidebar.json(meta)
+with st.expander("Resume context (technical)"):
+    st.write({"bank_folder_name": paths.bank_folder_name, "resume_id": paths.resume_id})
+    meta = read_metadata(paths)
+    if meta:
+        st.caption("Metadata")
+        st.json(meta)
 
 latex_current, _ = read_latex(paths)
 st.session_state.setdefault("latex_editor_value", latex_current)
@@ -85,61 +112,61 @@ compile_clicked = toolbar[1].button("Recompile", type="primary", use_container_w
 export_clicked = toolbar[2].button("Export PDF", use_container_width=True)
 status_placeholder = toolbar[3].empty()
 
-tabs = st.tabs(["Workspace", "Tailored Markdown", "Tailored Text", "Traceability", "Compile Logs"])
+tabs = st.tabs(["PDF Preview", "LaTeX Source", "Tailored Markdown", "Tailored Text", "Traceability", "Compile Logs"])
 
 with tabs[0]:
-    left, right = st.columns(2, gap="large")
-    with left:
-        st.subheader("LaTeX Source")
+    st.subheader("PDF Preview (read-only)")
+    if paths.pdf_path.exists():
         try:
-            from streamlit_ace import st_ace  # type: ignore
-
-            code = st_ace(
-                value=st.session_state.latex_editor_value,
-                language="latex",
-                theme="chrome",
-                key="latex_ace",
-                height=820,
-                font_size=13,
-                tab_size=2,
-                wrap=True,
-                show_gutter=True,
-                show_print_margin=False,
-                auto_update=True,
-            )
+            _pdf_iframe(paths.pdf_path.read_bytes(), height=860)
         except Exception:
-            st.caption("Tip: install `streamlit-ace` for a better editor (`pip install streamlit-ace`).")
-            code = st.text_area("LaTeX source", value=st.session_state.latex_editor_value, height=820)
-        st.session_state.latex_editor_value = code or ""
-
-    with right:
-        st.subheader("PDF Preview")
-        if paths.pdf_path.exists():
-            try:
-                _pdf_iframe(paths.pdf_path.read_bytes(), height=820)
-            except Exception:
-                st.warning("Failed to render PDF preview. You can still export the PDF if it exists.")
-        else:
-            st.info("No compiled PDF yet. Click Recompile.")
+            st.warning("Failed to render PDF preview. You can still export the PDF if it exists.")
+    else:
+        st.info("No compiled PDF yet. Click Recompile after editing LaTeX.")
 
 with tabs[1]:
+    st.subheader("LaTeX Source (editable)")
+    st.caption("Tip: Make small edits, then click Recompile. Compilation keeps the last successful PDF if an error occurs.")
+    try:
+        from streamlit_ace import st_ace  # type: ignore
+
+        code = st_ace(
+            value=st.session_state.latex_editor_value,
+            language="latex",
+            theme="chrome",
+            key="latex_ace",
+            height=860,
+            font_size=13,
+            tab_size=2,
+            wrap=True,
+            show_gutter=True,
+            show_print_margin=False,
+            auto_update=True,
+        )
+    except Exception:
+        st.caption("Install `streamlit-ace` for a better editor (`pip install streamlit-ace`).")
+        code = st.text_area("LaTeX source", value=st.session_state.latex_editor_value, height=860)
+    st.session_state.latex_editor_value = code or ""
+
+with tabs[2]:
     st.subheader("Tailored Markdown")
     md = read_markdown(paths)
     st.code(md or "(not available)", language="markdown")
     st.download_button("Download .md", data=md or "", file_name=f"{paths.resume_id}.md")
 
-with tabs[2]:
+with tabs[3]:
     st.subheader("Tailored Text")
     txt = read_text(paths)
     st.code(txt or "(not available)", language="text")
     st.download_button("Download .txt", data=txt or "", file_name=f"{paths.resume_id}.txt")
 
-with tabs[3]:
+with tabs[4]:
     st.subheader("Traceability")
+    st.caption("If a bullet doesn't map to evidence, it should be treated as unverified and removed/edited.")
     st.json(read_traceability(paths))
 
-with tabs[4]:
-    st.subheader("Compile log")
+with tabs[5]:
+    st.subheader("Compile Logs")
     if paths.log_path.exists():
         st.code(paths.log_path.read_text(encoding="utf-8", errors="replace")[-12000:])
     else:
@@ -186,3 +213,9 @@ if export_clicked:
             mime="application/pdf",
             use_container_width=True,
         )
+
+st.divider()
+st.markdown("### Next step")
+post = st.columns([1, 1, 2])
+post[0].page_link("ui/pages/2_tailor_resume.py", label="Create Another Tailored Resume", icon="✍️", use_container_width=True)
+post[1].page_link("ui/pages/3_preview_experience_bank.py", label="Review Experience Bank", icon="🔎", use_container_width=True)
