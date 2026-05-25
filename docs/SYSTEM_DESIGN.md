@@ -196,7 +196,7 @@ The repo still contains the earlier “rewrite planner / safe rewriter / verifie
 The recommended product flow is bank-first tailoring + deterministic assembly.
 
 ## Human review workflow
-The Streamlit UI ends in an editable LaTeX workspace:
+The supported product UI is **Next.js** (separate frontend repo) and ends in an editable Resume Workspace:
 - Edit LaTeX, recompile, preview PDF, export PDF
 - View Markdown/Text artifacts and evidence traceability
 This keeps final control with the user while preserving evidence constraints.

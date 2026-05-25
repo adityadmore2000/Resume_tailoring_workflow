@@ -59,6 +59,8 @@ class AppConfig:
 
     # Experience bank + RAG
     data_root: str = "data"
+    qdrant_url: str | None = None  # env: QDRANT_URL
+    qdrant_collection: str = "resume_tailor_chunks"  # env: QDRANT_COLLECTION
 
     @staticmethod
     def from_env(environ: Mapping[str, str] | None = None) -> "AppConfig":
@@ -98,6 +100,8 @@ class AppConfig:
             openai_compatible_model=_get("OPENAI_COMPATIBLE_MODEL", None),
             openai_compatible_embedding_model=_get("OPENAI_COMPATIBLE_EMBED_MODEL", None),
             data_root=_get("DATA_ROOT", "data") or "data",
+            qdrant_url=_get("QDRANT_URL", None),
+            qdrant_collection=_get("QDRANT_COLLECTION", "resume_tailor_chunks") or "resume_tailor_chunks",
         )
 
 

@@ -1,29 +1,12 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
-venv/
-dist/
-build/
-*.egg-info/
+.venv
+__pycache__
+**/__pycache__/
+**/*.pyc
+.pytest_cache
 
-# Streamlit
-.streamlit/
 .env
 
-# Outputs
-outputs/*
-!outputs/.gitkeep
+# Runtime data (generated)
+data/
 
-# Experience banks (keep registry)
-data/uploads/
-data/vector_store/
-data/experience_bank/*
-!data/experience_bank/banks_registry.json
-
-# OS
-.DS_Store
-generated_resumes
 .env.example
