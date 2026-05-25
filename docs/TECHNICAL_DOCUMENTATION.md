@@ -5,8 +5,8 @@ This document explains how the codebase works, the data contracts, and how to ex
 ## Project structure
 ```
 app/
-  main.py                 # CLI entrypoint
-  ui.py                   # Streamlit multi-page UI (bank → tailor → preview)
+  main.py                 # FastAPI entrypoint (uvicorn app.main:app)
+  legacy_cli.py           # Legacy CLI pipeline entrypoint
   config.py               # Safety + model config
   schemas.py              # Pydantic contracts
   prompts.py              # Back-compat shim for prompts
@@ -147,11 +147,14 @@ Produced files:
 - `outputs/tailored_resume.evaluation.json` (if evaluator enabled)
 
 ## UI usage
+The supported product UI is **Next.js** (separate `resume-tailor-frontend` repo) backed by **FastAPI** (this repo).
+
 Run:
-- `streamlit run app/ui.py`
+- Backend: `uvicorn app.main:app --reload --port 8000`
+- Frontend (separate repo): `cd ../resume-tailor-frontend && npm install && npm run dev`
 
 UI workflow:
-This UI is organized around the two-phase product flow:
+The UI is organized around the guided 4-step product flow:
 
 1. **Create Experience Bank**
    - Upload a master resume (.tex / .txt)
@@ -169,8 +172,8 @@ This UI is organized around the two-phase product flow:
 Important: **Tailoring does not accept a resume input.**
 
 State management:
-- `st.session_state` stores the Ollama settings and Tailor form state.
-- Tailor form state is preserved after submit; the UI provides an explicit “Clear” button.
+- Frontend holds form state in React state and preserves it after submit.
+- The UI provides an explicit “Clear Form” action that only resets inputs (does not delete artifacts).
 
 ## End-to-end execution flow
 There are two primary flows:
@@ -224,12 +227,10 @@ After a successful tailoring run, the system creates a `resume_id` and writes:
 - `compile.log` (compiler output + preflight notes)
 - `metadata.json` (paths + compile status)
 
-The Streamlit “Resume LaTeX Preview” page loads artifacts by `resume_id` (via query params) and exposes tabs:
-- Workspace (LaTeX editor + PDF preview)
-- Tailored Markdown
-- Tailored Text
-- Traceability
-- Compile Logs
+The Next.js Resume Workspace loads artifacts by `resume_id` via REST APIs:
+- `GET /api/resumes/{resume_id}/latex` + `PUT /api/resumes/{resume_id}/latex`
+- `POST /api/resumes/{resume_id}/compile` + `GET /api/resumes/{resume_id}/pdf`
+- `GET /api/resumes/{resume_id}/markdown`, `/text`, `/traceability`
 
 ### LaTeX structure preflight
 Before compilation, the system validates list/macro structure:
@@ -395,7 +396,7 @@ Keep the business logic independent of the provider:
 2. Ensure it exposes a method compatible with:
    - `chat(system, user) -> str`
    - `generate_json(system, user, schema) -> schema instance`
-3. Wire it into CLI/UI by changing construction in `app/main.py` / `app/ui.py`.
+3. Wire it into the backend by changing construction in `app/llm/factory.py`.
 
 ## Adding LangGraph later (without rewriting logic)
 The pipeline is plain Python functions. To add LangGraph:

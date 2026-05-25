@@ -4,8 +4,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from qdrant_client.http.models import PointStruct
+
+from app.config import DEFAULT_CONFIG
 from app.llm import LLMError, LLMProvider
 from app.rag.chunker import chunk_markdown_file
+from app.rag.qdrant_store import QdrantConfig, ensure_collection, get_client, upsert_points
 
 
 @dataclass(frozen=True)
@@ -63,5 +67,36 @@ def ingest_experience_bank(
     with out_path.open("w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps({"chunk_id": r.chunk_id, "text": r.text, "embedding": r.embedding, "metadata": r.metadata}) + "\n")
+
+    # Optional: also upsert embeddings into Qdrant for faster semantic search.
+    qdrant_url = (DEFAULT_CONFIG.qdrant_url or "").strip()
+    if qdrant_url:
+        with_emb = [r for r in records if r.embedding]
+        if with_emb:
+            dim = len(with_emb[0].embedding or [])
+            if dim > 0:
+                try:
+                    qc = QdrantConfig(url=qdrant_url, collection=DEFAULT_CONFIG.qdrant_collection)
+                    client = get_client(qc)
+                    ensure_collection(client=client, collection=qc.collection, vector_size=dim)
+                    points: list[PointStruct] = []
+                    for r in with_emb:
+                        emb = r.embedding
+                        if not emb or len(emb) != dim:
+                            continue
+                        points.append(
+                            PointStruct(
+                                id=r.chunk_id,
+                                vector=emb,
+                                payload={
+                                    "bank_folder_name": bank_folder_name,
+                                    "text": r.text,
+                                    "metadata": r.metadata,
+                                },
+                            )
+                        )
+                    upsert_points(client=client, collection=qc.collection, points=points)
+                except Exception as e:
+                    warnings.append(f"Qdrant upsert failed: {e}. Falling back to local JSONL vector store only.")
 
     return len(records), sorted(set(warnings))
