@@ -98,12 +98,30 @@ Legacy note:
 - The recommended product flow is: **generate an EXPERIENCE_BANK once**, then **tailor from the bank** (no resume upload in tailoring).
 
 ## UI usage (MVP)
-- `streamlit run app/ui.py`
+The product UI is **Next.js** (Streamlit is deprecated).
+
+### Backend (FastAPI)
+- `uvicorn backend.main:app --reload --port 8000`
+
+### Frontend (Next.js)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+URLs:
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
 
 Workflow:
 1. Create an `EXPERIENCE_BANK` from a master resume (upload once)
-2. Tailor a resume by selecting a bank + providing a JD (no resume upload during tailoring)
-3. On success, the app auto-opens the “Resume LaTeX Preview” workspace (edit + compile + export)
+2. Preview the bank (human-readable review)
+3. Tailor a resume by selecting a bank + providing a JD (no resume upload during tailoring)
+4. Review/export in the Resume Workspace (LaTeX edit + compile + PDF export)
+
+Legacy note:
+- The old Streamlit UI lives under `deprecated/streamlit_ui/` for reference only.
 
 ## LaTeX editor + PDF preview (generated resumes)
 After tailoring, the UI creates an editable workspace:
@@ -140,6 +158,7 @@ CLI scripts:
 ## Docs
 - `docs/SYSTEM_DESIGN.md`
 - `docs/TECHNICAL_DOCUMENTATION.md`
+User-facing docs are rendered inside the product via `/docs` (served by the backend from `docs/*.md`).
 
 ## Notes / Limitations
 - LaTeX parsing is template-agnostic but still heuristic (regex-based). It aims to be safe, not perfect.

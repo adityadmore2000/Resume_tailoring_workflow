@@ -147,11 +147,14 @@ Produced files:
 - `outputs/tailored_resume.evaluation.json` (if evaluator enabled)
 
 ## UI usage
+The supported product UI is **Next.js** (`frontend/`) backed by **FastAPI** (`backend/`).
+
 Run:
-- `streamlit run app/ui.py`
+- Backend: `uvicorn backend.main:app --reload --port 8000`
+- Frontend: `cd frontend && npm install && npm run dev`
 
 UI workflow:
-This UI is organized around the two-phase product flow:
+The UI is organized around the guided 4-step product flow:
 
 1. **Create Experience Bank**
    - Upload a master resume (.tex / .txt)
@@ -169,8 +172,8 @@ This UI is organized around the two-phase product flow:
 Important: **Tailoring does not accept a resume input.**
 
 State management:
-- `st.session_state` stores the Ollama settings and Tailor form state.
-- Tailor form state is preserved after submit; the UI provides an explicit “Clear” button.
+- Frontend holds form state in React state and preserves it after submit.
+- The UI provides an explicit “Clear Form” action that only resets inputs (does not delete artifacts).
 
 ## End-to-end execution flow
 There are two primary flows:

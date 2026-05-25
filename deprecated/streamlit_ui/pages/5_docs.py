@@ -47,4 +47,3 @@ next_cols = st.columns([1, 1, 1, 2])
 next_cols[0].page_link("ui/pages/1_create_experience_bank.py", label="Create Experience Bank", icon="🧱", use_container_width=True)
 next_cols[1].page_link("ui/pages/3_preview_experience_bank.py", label="Preview Bank", icon="🔎", use_container_width=True)
 next_cols[2].page_link("ui/pages/2_tailor_resume.py", label="Tailor Resume", icon="✍️", use_container_width=True)
-

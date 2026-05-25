@@ -89,4 +89,3 @@ with st.container(border=True):
     actions = st.columns([1, 1, 2])
     actions[0].page_link("ui/pages/1_create_experience_bank.py", label="Create Experience Bank", icon="🧱", use_container_width=True)
     actions[1].page_link("ui/pages/2_tailor_resume.py", label="Tailor Resume", icon="✍️", use_container_width=True)
-

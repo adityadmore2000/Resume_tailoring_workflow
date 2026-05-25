@@ -13,6 +13,11 @@ build/
 .streamlit/
 .env
 
+# Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
 # Outputs
 outputs/*
 !outputs/.gitkeep
@@ -27,3 +32,4 @@ data/experience_bank/*
 .DS_Store
 generated_resumes
 .env.example
+package-lock.json

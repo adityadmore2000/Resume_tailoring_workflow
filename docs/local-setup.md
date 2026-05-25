@@ -12,14 +12,14 @@ Local runs are useful for fast iteration on your Experience Banks and tailoring 
    - `source .venv/bin/activate`
    - `pip install -r requirements.txt`
 2. Configure environment variables (copy `.env.example`).
-3. Run the UI:
-   - `streamlit run app/ui.py`
-4. (Optional) Run the API server:
-   - `uvicorn app.ui.api.server:app --reload`
+3. Run the backend API:
+   - `uvicorn backend.main:app --reload --port 8000`
+4. Run the frontend UI:
+   - `cd frontend && npm install && npm run dev`
 
 ## What happens internally
-- Streamlit runs the guided workflow UI.
-- FastAPI exposes programmatic endpoints for bank preview and resume workspace artifacts.
+- Next.js runs the guided workflow UI (the only supported user-facing UI).
+- FastAPI exposes the backend endpoints used by the frontend.
 
 ## Common mistakes
 - Missing API keys / model config (check `.env.example`).
@@ -27,4 +27,3 @@ Local runs are useful for fast iteration on your Experience Banks and tailoring 
 
 ## Recommended next steps
 - Create your first Experience Bank, then tailor a sample JD to validate end-to-end output.
-

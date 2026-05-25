@@ -21,4 +21,3 @@ def render_top_nav(*, active: str | None = None) -> None:
 
         if active:
             st.caption(f"You're here: **{active}**")
-
