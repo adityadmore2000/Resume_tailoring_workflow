@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+from dataclasses import replace
+
+import app.ui.api.bank_preview_api as bank_preview_api_mod
+from app.config import DEFAULT_CONFIG
+from app.rag.qdrant_store import QdrantConfig, ensure_collection, get_client
 from app.ui.api.bank_preview_api import compute_stats, tree_for_expected_dirs
 from app.ui.api.experience_banks_api import read_bank_file
 
@@ -17,17 +21,29 @@ def test_tree_for_expected_dirs_includes_expected_keys(tmp_path: Path):
     assert any(p.name == "a.md" for p in tree["projects"])
 
 
-def test_compute_stats_counts_chunks_scoped_to_bank(tmp_path: Path):
+def test_compute_stats_counts_chunks_scoped_to_bank(tmp_path: Path, monkeypatch):
     bank = tmp_path / "bank"
     vec = tmp_path / "vec"
     (bank / "metadata").mkdir(parents=True, exist_ok=True)
     (vec).mkdir(parents=True, exist_ok=True)
-    # fake index.jsonl with two banks
-    rows = [
-        {"chunk_id": "c1", "text": "t", "embedding": None, "metadata": {"bank_folder_name": "b1"}},
-        {"chunk_id": "c2", "text": "t", "embedding": None, "metadata": {"bank_folder_name": "b2"}},
-    ]
-    (vec / "index.jsonl").write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+
+    cfg = replace(DEFAULT_CONFIG, qdrant_url=":memory:", qdrant_collection="test_stats")
+    monkeypatch.setattr(bank_preview_api_mod, "DEFAULT_CONFIG", cfg)
+
+    qc = QdrantConfig(url=cfg.qdrant_url or "", collection=cfg.qdrant_collection)
+    client = get_client(qc)
+    ensure_collection(client=client, collection=qc.collection, vector_size=3)
+
+    from qdrant_client.http.models import PointStruct
+    import uuid
+
+    client.upsert(
+        collection_name=qc.collection,
+        points=[
+            PointStruct(id=str(uuid.uuid4()), vector=[0.0, 0.0, 0.0], payload={"bank_folder_name": "b1"}),
+            PointStruct(id=str(uuid.uuid4()), vector=[0.0, 0.0, 0.0], payload={"bank_folder_name": "b2"}),
+        ],
+    )
     s = compute_stats(bank, vec, "b1")
     assert s.total_chunks == 1
 

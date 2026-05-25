@@ -43,8 +43,8 @@ app/
 
   rag/
     chunker.py             # Chunk markdown for retrieval
-    ingest.py              # Build per-bank vector store (JSONL)
-    retriever.py           # Hybrid retrieval (semantic if available + keywords)
+    ingest.py              # Qdrant ingestion (Qdrant-only runtime)
+    retriever.py           # Qdrant retrieval (bank-scoped)
 
   tailoring/
     jd_parser.py           # Wrapper around JD analysis
@@ -113,7 +113,7 @@ Outputs:
 Experience bank outputs (optional, for bank-driven workflows):
 - `data/uploads/<bank>/resume.tex` (source snapshot)
 - `data/experience_bank/<bank>/...` (validated markdown + JSON index)
-- `data/vector_store/<bank>/index.jsonl` (per-bank retrieval index)
+- Qdrant collection `resume_tailor_chunks` (bank-scoped points via `bank_folder_name`)
 - Registry entry in `data/experience_bank/banks_registry.json`
 
 ## CLI usage
@@ -199,7 +199,7 @@ The bank generator behaves like an evidence-grounded knowledge-base builder (not
 5. Derive work/project groupings from LaTeX macros when available
 6. Validate schema constraints (evidence_id integrity, metric linking, etc.)
 7. Generate markdown files from validated JSON (deterministic writer)
-8. Ingest markdown into per-bank vector store (`index.jsonl`)
+8. Ingest markdown into Qdrant (`resume_tailor_chunks`)
 9. Update `banks_registry.json`
 
 ### Tailored resume output structure (deterministic)

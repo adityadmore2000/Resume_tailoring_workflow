@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 from app.bank_generator.folder_manager import BankFolderError, get_bank_paths, safe_join
@@ -221,3 +223,52 @@ def read_bank_file(bank_folder_name: str, rel_path: str, *, data_root: Path | No
     content = abs_path.read_text(encoding="utf-8", errors="replace")
     title = _extract_title_from_markdown(content) if abs_path.suffix.lower() == ".md" else abs_path.name
     return (str(Path(rel_path)), title, content)
+
+
+def write_bank_file(
+    bank_folder_name: str,
+    rel_path: str,
+    *,
+    content: str,
+    data_root: Path | None = None,
+) -> str:
+    """
+    Write a markdown/json file in the bank safely.
+    - Prevents traversal (safe_join)
+    - Only allows .md/.json
+    - Validates JSON if writing .json
+    - Creates a timestamped backup next to the original before overwrite
+    Returns: normalized relative path
+    """
+    data_root = data_root or Path(DEFAULT_CONFIG.data_root)
+    paths = get_bank_paths(data_root, bank_folder_name)
+    bank_dir = paths.experience_bank_dir
+    if not bank_dir.exists():
+        raise ExperienceBankAPIError(f"Bank not found: {paths.bank_folder_name}")
+
+    try:
+        abs_path = safe_join(bank_dir, rel_path)
+    except BankFolderError as e:
+        raise ExperienceBankAPIError(str(e)) from e
+
+    if abs_path.suffix.lower() not in _ALLOWED_PREVIEW_EXTS:
+        raise ExperienceBankAPIError("Only markdown/json files can be edited.")
+    if not abs_path.exists() or not abs_path.is_file():
+        raise ExperienceBankAPIError("File not found.")
+
+    if abs_path.suffix.lower() == ".json":
+        try:
+            json.loads(content or "")
+        except Exception as e:
+            raise ExperienceBankAPIError(f"Invalid JSON: {e}") from e
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_path = abs_path.with_name(abs_path.name + f".bak.{ts}")
+    try:
+        backup_path.write_text(abs_path.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+    except Exception:
+        # Backup is best-effort; don't block writes if it fails.
+        pass
+
+    abs_path.write_text(content, encoding="utf-8")
+    return str(Path(rel_path))

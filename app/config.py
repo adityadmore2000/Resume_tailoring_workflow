@@ -4,6 +4,29 @@ import os
 from dataclasses import dataclass
 from typing import Mapping, Literal
 
+from dotenv import load_dotenv
+
+
+def _load_dotenv_early() -> None:
+    """Load `.env` as a convenience for local dev.
+
+    - Does not override existing OS env vars.
+    - Prefers a `.env` in the current working directory.
+    """
+
+    try:
+        cwd_env = os.path.join(os.getcwd(), ".env")
+        if os.path.exists(cwd_env):
+            load_dotenv(dotenv_path=cwd_env, override=False)
+        else:
+            load_dotenv(override=False)
+    except Exception:
+        # Config import must remain safe even if dotenv loading fails.
+        return
+
+
+_load_dotenv_early()
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -59,6 +82,7 @@ class AppConfig:
 
     # Experience bank + RAG
     data_root: str = "data"
+    vector_store_backend: Literal["qdrant"] = "qdrant"  # env: VECTOR_STORE_BACKEND
     qdrant_url: str | None = None  # env: QDRANT_URL
     qdrant_collection: str = "resume_tailor_chunks"  # env: QDRANT_COLLECTION
 
@@ -76,6 +100,10 @@ class AppConfig:
         provider = (_get("LLM_PROVIDER", "ollama") or "ollama").strip()
         if provider not in {"ollama", "openai", "openai_compatible"}:
             provider = "ollama"
+
+        vs_backend = (_get("VECTOR_STORE_BACKEND", "qdrant") or "qdrant").strip().casefold()
+        if vs_backend != "qdrant":
+            vs_backend = "qdrant"
 
         timeout_s_raw = _get("LLM_TIMEOUT_S", None)
         timeout_s = 120
@@ -100,6 +128,7 @@ class AppConfig:
             openai_compatible_model=_get("OPENAI_COMPATIBLE_MODEL", None),
             openai_compatible_embedding_model=_get("OPENAI_COMPATIBLE_EMBED_MODEL", None),
             data_root=_get("DATA_ROOT", "data") or "data",
+            vector_store_backend=vs_backend,  # type: ignore[arg-type]
             qdrant_url=_get("QDRANT_URL", None),
             qdrant_collection=_get("QDRANT_COLLECTION", "resume_tailor_chunks") or "resume_tailor_chunks",
         )

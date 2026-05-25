@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime, timezone
+import re
+import uuid
 
 from qdrant_client.http.models import PointStruct
 
 from app.config import DEFAULT_CONFIG
+from app.config import AppConfig
 from app.llm import LLMError, LLMProvider
 from app.rag.chunker import chunk_markdown_file
-from app.rag.qdrant_store import QdrantConfig, ensure_collection, get_client, upsert_points
+from app.rag.qdrant_store import QdrantConfig, delete_points_for_bank, ensure_collection, get_client, upsert_points
 
 
 @dataclass(frozen=True)
@@ -20,83 +23,101 @@ class VectorStoreRecord:
     metadata: dict[str, object]
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    dot = 0.0
-    na = 0.0
-    nb = 0.0
-    for x, y in zip(a, b):
-        dot += x * y
-        na += x * x
-        nb += y * y
-    if na <= 0.0 or nb <= 0.0:
-        return 0.0
-    return dot / ((na ** 0.5) * (nb ** 0.5))
-
-
 def ingest_experience_bank(
     *,
     bank_folder_name: str,
     experience_bank_dir: Path,
-    vector_store_dir: Path,
     llm: LLMProvider,
+    cfg: AppConfig | None = None,
 ) -> tuple[int, list[str]]:
     """
-    Ingests markdown files into a JSONL "vector store".
-    If embeddings fail, stores embedding=None and relies on keyword-only retrieval.
+    Ingests markdown files into Qdrant.
+
+    Qdrant is the only supported runtime vector store. This function must not read/write any
+    JSONL index files.
     """
     warnings: list[str] = []
     md_files = sorted([p for p in experience_bank_dir.rglob("*.md") if p.is_file()])
     records: list[VectorStoreRecord] = []
 
+    if cfg is None:
+        cfg = DEFAULT_CONFIG
+
+    if not (cfg.qdrant_url or "").strip():
+        raise RuntimeError("Qdrant is required. Set QDRANT_URL (and optionally QDRANT_COLLECTION).")
+
+    created_at = datetime.now(timezone.utc).isoformat()
+
     for p in md_files:
         base_md = {"bank_folder_name": bank_folder_name, "path": str(p)}
         chunks = chunk_markdown_file(p, base_metadata=base_md)
         for c in chunks:
-            emb = None
             try:
                 emb = llm.embed_text(c.text[:8000])
             except LLMError as e:
-                warnings.append(f"Embeddings unavailable for {p.name}: {e}. Falling back to keyword-only retrieval.")
-                emb = None
+                raise RuntimeError(f"Embeddings failed for {p.name}: {e}") from e
             records.append(VectorStoreRecord(chunk_id=c.chunk_id, text=c.text, embedding=emb, metadata=c.metadata))
 
-    vector_store_dir.mkdir(parents=True, exist_ok=True)
-    out_path = vector_store_dir / "index.jsonl"
-    with out_path.open("w", encoding="utf-8") as f:
-        for r in records:
-            f.write(json.dumps({"chunk_id": r.chunk_id, "text": r.text, "embedding": r.embedding, "metadata": r.metadata}) + "\n")
+    with_emb = [r for r in records if r.embedding]
+    if not with_emb:
+        raise RuntimeError("No embeddings were produced; cannot ingest into Qdrant.")
 
-    # Optional: also upsert embeddings into Qdrant for faster semantic search.
-    qdrant_url = (DEFAULT_CONFIG.qdrant_url or "").strip()
-    if qdrant_url:
-        with_emb = [r for r in records if r.embedding]
-        if with_emb:
-            dim = len(with_emb[0].embedding or [])
-            if dim > 0:
-                try:
-                    qc = QdrantConfig(url=qdrant_url, collection=DEFAULT_CONFIG.qdrant_collection)
-                    client = get_client(qc)
-                    ensure_collection(client=client, collection=qc.collection, vector_size=dim)
-                    points: list[PointStruct] = []
-                    for r in with_emb:
-                        emb = r.embedding
-                        if not emb or len(emb) != dim:
-                            continue
-                        points.append(
-                            PointStruct(
-                                id=r.chunk_id,
-                                vector=emb,
-                                payload={
-                                    "bank_folder_name": bank_folder_name,
-                                    "text": r.text,
-                                    "metadata": r.metadata,
-                                },
-                            )
-                        )
-                    upsert_points(client=client, collection=qc.collection, points=points)
-                except Exception as e:
-                    warnings.append(f"Qdrant upsert failed: {e}. Falling back to local JSONL vector store only.")
+    dim = len(with_emb[0].embedding or [])
+    if dim <= 0:
+        raise RuntimeError("Invalid embedding dimension; cannot ingest into Qdrant.")
+
+    qc = QdrantConfig(url=(cfg.qdrant_url or "").strip(), collection=cfg.qdrant_collection)
+    client = get_client(qc)
+    ensure_collection(client=client, collection=qc.collection, vector_size=dim)
+
+    # Delete any existing points for this bank to avoid duplicates during rebuild/re-ingest.
+    delete_points_for_bank(client=client, collection=qc.collection, bank_folder_name=bank_folder_name)
+
+    def _extract_field(pattern: str, text: str) -> str:
+        m = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
+        return (m.group(1).strip() if m else "").strip()
+
+    points: list[PointStruct] = []
+    for r in with_emb:
+        emb = r.embedding
+        if not emb or len(emb) != dim:
+            raise RuntimeError("Inconsistent embedding dimensions; aborting ingestion.")
+
+        text = r.text or ""
+        source_file = str(r.metadata.get("source_file") or r.metadata.get("path") or "")
+        # Best-effort extraction from bank markdown conventions.
+        domain = _extract_field(r"^\s*-\s*Subtitle/domain:\s*(.+?)\s*$", text)
+        capability = _extract_field(r"^\s*-\s*Name:\s*(.+?)\s*$", text)
+        company = _extract_field(r"^\s*-\s*Company:\s*(.+?)\s*$", text)
+        project = _extract_field(r"^\s*-\s*Project:\s*(.+?)\s*$", text)
+        tools_raw = _extract_field(r"^\s*-\s*Technologies/tools explicitly mentioned:\s*(.+?)\s*$", text)
+        tools = [t.strip() for t in re.split(r"[,;/]", tools_raw) if t.strip()] if tools_raw else []
+
+        evidence_ids = r.metadata.get("evidence_ids")
+        if not isinstance(evidence_ids, list):
+            evidence_ids = []
+        evidence_ids = [str(x) for x in evidence_ids]
+
+        metrics_available = bool(r.metadata.get("metrics_available"))
+
+        payload: dict[str, object] = {
+            "bank_folder_name": bank_folder_name,
+            "chunk_id": r.chunk_id,
+            "text": text,
+            "source_file": source_file,
+            "domain": domain,
+            "capability": capability,
+            "tools": tools,
+            "project": project,
+            "company": company,
+            "evidence_ids": evidence_ids,
+            "metrics_available": metrics_available,
+            "created_at": created_at,
+        }
+        # Qdrant point IDs must be UUID (or int). Keep the human-readable `chunk_id` in payload.
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"resume-tailor:{bank_folder_name}:{r.chunk_id}"))
+        points.append(PointStruct(id=point_id, vector=emb, payload=payload))
+
+    upsert_points(client=client, collection=qc.collection, points=points)
 
     return len(records), sorted(set(warnings))

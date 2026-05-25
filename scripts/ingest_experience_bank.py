@@ -25,12 +25,12 @@ def main() -> int:
     n, warnings = ingest_experience_bank(
         bank_folder_name=paths.bank_folder_name,
         experience_bank_dir=paths.experience_bank_dir,
-        vector_store_dir=paths.vector_store_dir,
         llm=llm,
+        cfg=cfg,
     )
     for w in warnings:
         print(f"[warn] {w}")
-    print(f"Ingested {n} chunks into {paths.vector_store_dir}")
+    print(f"Ingested {n} chunks into Qdrant collection '{cfg.qdrant_collection}'")
     return 0
 
 

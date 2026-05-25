@@ -49,6 +49,9 @@ def safe_join(root: Path, *parts: str) -> Path:
 
 
 def get_bank_paths(data_root: Path, bank_folder_name: str) -> BankPaths:
+    raw = (bank_folder_name or "").strip()
+    if ".." in raw or "/" in raw or "\\" in raw:
+        raise BankFolderError("Bank folder name contains invalid path characters.")
     slug = slugify_bank_folder_name(bank_folder_name)
     validate_bank_folder_name(slug)
     uploads = safe_join(data_root / "uploads", slug)
@@ -67,4 +70,3 @@ def create_bank_directories(paths: BankPaths, *, overwrite: bool = False) -> Non
     paths.uploads_dir.mkdir(parents=True, exist_ok=True)
     paths.experience_bank_dir.mkdir(parents=True, exist_ok=True)
     paths.vector_store_dir.mkdir(parents=True, exist_ok=True)
-

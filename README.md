@@ -9,6 +9,7 @@ FastAPI backend for Resume Tailor (AI/RAG/Experience Banks/LaTeX/PDF). This repo
    - `python -m pip install -r requirements.txt`
 2. Configure environment:
    - `cp .env.example .env` and edit values as needed
+   - The backend auto-loads `.env` on startup (OS environment variables still take precedence).
 3. Run the API:
    - `uvicorn app.main:app --reload --port 8000`
 
@@ -16,7 +17,8 @@ Backend URL: `http://localhost:8000`
 
 ## Environment variables
 - `FRONTEND_URL` (CORS allowlist origin, e.g. `http://localhost:3000`)
-- `QDRANT_URL` (e.g. `http://localhost:6333`)
+- `VECTOR_STORE_BACKEND` (default `qdrant`; only supported runtime backend)
+- `QDRANT_URL` (**required**, e.g. `http://localhost:6333`)
 - `QDRANT_COLLECTION` (default `resume_tailor_chunks`)
 - `LLM_PROVIDER` (`ollama` | `openai` | `openai_compatible`)
 - `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_EMBED_MODEL` (when `LLM_PROVIDER=ollama`)
@@ -33,11 +35,28 @@ Experience Banks:
 - `GET /api/banks`
 - `POST /api/banks`
 - `GET /api/banks/{bank_name}`
+- `DELETE /api/banks/{bank_name}`
 - `GET /api/banks/{bank_name}/files`
 - `GET /api/banks/{bank_name}/files/content?path=...`
+- `PUT /api/banks/{bank_name}/metadata`
+- `PUT /api/banks/{bank_name}/files/content`
+- `POST /api/banks/{bank_name}/reingest`
+- `POST /api/banks/{bank_name}/edit/propose`
+- `POST /api/banks/{bank_name}/edit/{proposal_id}/apply`
+- `POST /api/banks/{bank_name}/edit/{proposal_id}/reject`
+- `GET /api/banks/{bank_name}/edit/history`
 
 Tailoring:
 - `POST /api/tailor`
+
+Tasks:
+- `GET /api/tasks/{task_id}/progress`
+
+Settings:
+- `GET /api/settings`
+- `PUT /api/settings` (currently returns restart-required)
+- `POST /api/settings/test-llm`
+- `POST /api/settings/test-embeddings`
 
 Generated resumes:
 - `GET /api/resumes/{resume_id}`
@@ -58,7 +77,7 @@ Docs:
 Start Qdrant locally:
 - `docker run -p 6333:6333 qdrant/qdrant:latest`
 
-If `QDRANT_URL` is set, the backend will attempt to upsert embeddings during bank ingestion and use Qdrant for semantic retrieval (falling back to the local JSONL store if Qdrant is unavailable).
+Qdrant is required at runtime. The backend validates Qdrant connectivity at startup and will fail fast with a clear error if Qdrant is unreachable.
 
 ## LaTeX compiler setup
 For `POST /api/resumes/{resume_id}/compile` and PDF endpoints you need one of:
@@ -82,4 +101,3 @@ Services:
 - Backend: `http://localhost:8000`
 - Qdrant: `http://localhost:6333`
 - Ollama: `http://localhost:11434`
-

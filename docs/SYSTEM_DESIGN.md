@@ -60,12 +60,12 @@ Goal: tailor a resume **without requiring the user to provide the raw resume aga
 
 Tailoring operates only on:
 - `data/experience_bank/<bank>/...`
-- `data/vector_store/<bank>/...`
+- Qdrant collection `resume_tailor_chunks` (scoped by `bank_folder_name`)
 - `banks_registry.json`
 
 Main components:
 - JD parsing into structured requirements (LLM extractor)
-- Bank-scoped hybrid retrieval (vector index + keyword fallback)
+- Bank-scoped semantic retrieval (Qdrant-only)
 - Deterministic evidence verification (`supported/partially_supported/unsupported`)
 - Resume assembly using verified evidence IDs only
 - Skills categorization (recruiter-friendly categories; evidence-grounded)
@@ -76,7 +76,7 @@ Main components:
 For repeated tailoring across many JDs, this project also supports generating an **EXPERIENCE_BANK**:
 - A per-user/per-resume, evidence-grounded knowledge base derived from a master resume
 - Stored under `data/experience_bank/<bank_folder_name>/`
-- Indexed for retrieval under `data/vector_store/<bank_folder_name>/`
+- Indexed for retrieval in Qdrant (`resume_tailor_chunks`) with bank isolation via `bank_folder_name`
 - Registered in `data/experience_bank/banks_registry.json`
 
 Key principle:
