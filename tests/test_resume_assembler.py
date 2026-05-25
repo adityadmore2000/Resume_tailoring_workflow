@@ -63,11 +63,10 @@ def test_assembler_includes_summary_and_all_experience_entries_and_order(tmp_pat
     assert assembled.used_evidence_ids == ["ev_nd"]
     # SUMMARY must exist and order is deterministic.
     assert assembled.latex.find("\\section{SUMMARY}") < assembled.latex.find("\\section{EXPERIENCE}") < assembled.latex.find(
-        "\\section{PROJECTS}"
+        "\\section{SKILLS}"
     )
-    assert assembled.latex.find("\\section{PROJECTS}") < assembled.latex.find("\\section{SKILLS}") < assembled.latex.find(
-        "\\section{EDUCATION}"
-    )
+    assert assembled.latex.find("\\section{SKILLS}") < assembled.latex.find("\\section{EDUCATION}")
+    assert "\\section{PROJECTS}" not in assembled.latex
     # Title/subtitle are preserved (not merged).
     assert "{AI Engineer $|$ Freelancer}" in assembled.latex
     assert "{Computer Vision \\\\& Generative AI Systems Development}" in assembled.latex
