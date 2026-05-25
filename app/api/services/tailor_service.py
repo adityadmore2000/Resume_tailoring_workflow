@@ -12,6 +12,7 @@ from app.rag.retriever import retrieve
 from app.tailoring.evidence_verifier import verify_retrieved_evidence
 from app.tailoring.jd_parser import parse_jd
 from app.tailoring.resume_assembler import assemble_from_bank, load_bank_index
+from app.tasks.task_progress import TASKS
 
 
 class TailorError(ValueError):
@@ -25,7 +26,7 @@ class TailorResult:
     messages: list[str]
 
 
-def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str) -> TailorResult:
+def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str, task_id: str | None = None) -> TailorResult:
     if not bank_folder_name.strip():
         raise TailorError("bank_name is required")
     if not jd_text.strip():
@@ -39,14 +40,17 @@ def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str) -> TailorRes
         raise TailorError("Bank not found")
 
     bank_index = load_bank_index(paths.experience_bank_dir)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="resume_parsed")
 
     messages: list[str] = []
     jd_struct = parse_jd(jd_text, llm)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="jd_analyzed")
 
     chunks = retrieve(
         query=jd_text,
         bank_folder_name=paths.bank_folder_name,
-        vector_store_dir=paths.vector_store_dir,
         llm=llm,
         top_k=12,
     )
@@ -62,6 +66,8 @@ def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str) -> TailorRes
         retrieved_eids = [e.evidence_id for e in bank_index.evidence_claims[:80]]
 
     verified, evidence_map = verify_retrieved_evidence(jd=jd_struct, bank_index=bank_index, retrieved_evidence_ids=retrieved_eids)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="experience_matched")
 
     assembled = assemble_from_bank(
         bank_dir=paths.experience_bank_dir,
@@ -69,6 +75,8 @@ def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str) -> TailorRes
         verified_evidence=verified,
         jd=jd_struct,
     )
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="content_tailored")
     if assembled.messages:
         messages.extend(assembled.messages)
 
@@ -103,4 +111,8 @@ def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str) -> TailorRes
     except LatexCompileError as e:
         messages.append(str(e))
 
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="finalized")
+        TASKS.set_result(task_id=task_id, result={"bank_folder_name": paths.bank_folder_name, "resume_id": resume_id, "messages": messages})
+        TASKS.complete(task_id=task_id)
     return TailorResult(bank_folder_name=paths.bank_folder_name, resume_id=resume_id, messages=messages)

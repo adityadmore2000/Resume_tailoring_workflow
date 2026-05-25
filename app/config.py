@@ -59,6 +59,7 @@ class AppConfig:
 
     # Experience bank + RAG
     data_root: str = "data"
+    vector_store_backend: Literal["qdrant"] = "qdrant"  # env: VECTOR_STORE_BACKEND
     qdrant_url: str | None = None  # env: QDRANT_URL
     qdrant_collection: str = "resume_tailor_chunks"  # env: QDRANT_COLLECTION
 
@@ -76,6 +77,10 @@ class AppConfig:
         provider = (_get("LLM_PROVIDER", "ollama") or "ollama").strip()
         if provider not in {"ollama", "openai", "openai_compatible"}:
             provider = "ollama"
+
+        vs_backend = (_get("VECTOR_STORE_BACKEND", "qdrant") or "qdrant").strip().casefold()
+        if vs_backend != "qdrant":
+            vs_backend = "qdrant"
 
         timeout_s_raw = _get("LLM_TIMEOUT_S", None)
         timeout_s = 120
@@ -100,6 +105,7 @@ class AppConfig:
             openai_compatible_model=_get("OPENAI_COMPATIBLE_MODEL", None),
             openai_compatible_embedding_model=_get("OPENAI_COMPATIBLE_EMBED_MODEL", None),
             data_root=_get("DATA_ROOT", "data") or "data",
+            vector_store_backend=vs_backend,  # type: ignore[arg-type]
             qdrant_url=_get("QDRANT_URL", None),
             qdrant_collection=_get("QDRANT_COLLECTION", "resume_tailor_chunks") or "resume_tailor_chunks",
         )

@@ -23,7 +23,7 @@ class FakeLLM:
 
 
 def test_generate_experience_bank_rejects_overwrite_by_default(tmp_path: Path):
-    cfg = AppConfig(data_root=str(tmp_path / "data"))
+    cfg = AppConfig(data_root=str(tmp_path / "data"), qdrant_url=":memory:", qdrant_collection="test_overwrite")
     llm = FakeLLM()
     resume = r"\\section{EXPERIENCE}\n\\resumeItem{Built a pipeline in Python.}\n"
 

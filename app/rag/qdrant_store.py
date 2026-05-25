@@ -19,8 +19,22 @@ class QdrantConfig:
     collection: str
 
 
+_MEMORY_CLIENT: QdrantClient | None = None
+
+
 def get_client(cfg: QdrantConfig) -> QdrantClient:
-    return QdrantClient(url=cfg.url)
+    url = (cfg.url or "").strip()
+    if url == ":memory:":
+        global _MEMORY_CLIENT
+        if _MEMORY_CLIENT is None:
+            _MEMORY_CLIENT = QdrantClient(location=":memory:")
+        return _MEMORY_CLIENT
+    return QdrantClient(url=url)
+
+
+def healthcheck(*, client: QdrantClient) -> None:
+    # Any API call that requires a round-trip is fine; keep it lightweight.
+    client.get_collections()
 
 
 def ensure_collection(*, client: QdrantClient, collection: str, vector_size: int) -> None:
@@ -44,6 +58,17 @@ def upsert_points(
     client.upsert(collection_name=collection, points=points)
 
 
+def delete_points_for_bank(*, client: QdrantClient, collection: str, bank_folder_name: str) -> None:
+    f = Filter(must=[FieldCondition(key="bank_folder_name", match=MatchValue(value=bank_folder_name))])
+    client.delete(collection_name=collection, points_selector=f)
+
+
+def count_points_for_bank(*, client: QdrantClient, collection: str, bank_folder_name: str) -> int:
+    f = Filter(must=[FieldCondition(key="bank_folder_name", match=MatchValue(value=bank_folder_name))])
+    res = client.count(collection_name=collection, count_filter=f, exact=True)
+    return int(res.count or 0)
+
+
 def search(
     *,
     client: QdrantClient,
@@ -53,23 +78,23 @@ def search(
     limit: int,
 ) -> list[dict[str, object]]:
     f = Filter(must=[FieldCondition(key="bank_folder_name", match=MatchValue(value=bank_folder_name))])
-    hits = client.search(
+    res = client.query_points(
         collection_name=collection,
-        query_vector=query_vector,
+        query=query_vector,
         query_filter=f,
         limit=limit,
         with_payload=True,
     )
     out: list[dict[str, object]] = []
-    for h in hits:
-        payload = h.payload or {}
+    for h in (res.points or []):
+        payload = getattr(h, "payload", None) or {}
+        score = float(getattr(h, "score", 0.0) or 0.0)
         out.append(
             {
-                "chunk_id": str(h.id),
-                "score": float(h.score or 0.0),
+                "chunk_id": str(payload.get("chunk_id") or h.id),
+                "score": score,
                 "text": payload.get("text", ""),
-                "metadata": payload.get("metadata", {}),
+                "metadata": payload,
             }
         )
     return out
-

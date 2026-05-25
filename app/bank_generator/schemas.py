@@ -59,6 +59,17 @@ class WorkExperienceEntry(BaseModel):
     source_text: str = ""
     evidence_ids: list[str] = Field(default_factory=list)
 
+    # Immutable source-of-truth fields copied from the Experience Bank.
+    # Tailoring must never modify these.
+    source_role_title: str | None = None
+    source_employment_type_or_label: str | None = None
+    source_company: str | None = None
+    source_display_title: str | None = None
+    source_subtitle: str | None = None
+    source_start_date: str | None = None
+    source_end_date: str | None = None
+    source_location: str | None = None
+
 
 class ProjectEntry(BaseModel):
     project_id: str

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
+from app.config import DEFAULT_CONFIG
+from app.rag.qdrant_store import QdrantConfig, count_points_for_bank, get_client
 from app.tailoring.resume_assembler import load_bank_index
 
 
@@ -38,20 +38,6 @@ def iter_files(root: Path) -> list[Path]:
     return [p for p in root.rglob("*") if p.is_file()]
 
 
-def load_index_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        try:
-            obj = json.loads(line)
-        except Exception:
-            continue
-        if isinstance(obj, dict):
-            rows.append(obj)
-    return rows
-
-
 def tree_for_expected_dirs(bank_dir: Path) -> dict[str, list[Path]]:
     out: dict[str, list[Path]] = {}
     for d in EXPECTED_DIRS:
@@ -67,9 +53,15 @@ def compute_stats(bank_dir: Path, vector_dir: Path, bank_folder_name: str) -> Ba
     files = iter_files(bank_dir)
     md_files = [p for p in files if p.suffix.lower() == ".md"]
 
-    idx_path = vector_dir / "index.jsonl"
-    rows = load_index_jsonl(idx_path)
-    rows = [r for r in rows if isinstance(r.get("metadata"), dict) and r["metadata"].get("bank_folder_name") == bank_folder_name]
+    total_chunks = 0
+    qdrant_url = (DEFAULT_CONFIG.qdrant_url or "").strip()
+    if qdrant_url:
+        try:
+            qc = QdrantConfig(url=qdrant_url, collection=DEFAULT_CONFIG.qdrant_collection)
+            client = get_client(qc)
+            total_chunks = count_points_for_bank(client=client, collection=qc.collection, bank_folder_name=bank_folder_name)
+        except Exception:
+            total_chunks = 0
 
     try:
         bank_index = load_bank_index(bank_dir)
@@ -91,10 +83,9 @@ def compute_stats(bank_dir: Path, vector_dir: Path, bank_folder_name: str) -> Ba
     return BankStats(
         total_files=len(files),
         total_md_files=len(md_files),
-        total_chunks=len(rows),
+        total_chunks=total_chunks,
         total_evidence_claims=len(evidence_claims),
         metrics_available=metrics_available,
         tools_found=tools_top,
         supported_domains=domains_top,
     )
-

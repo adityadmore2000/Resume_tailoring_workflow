@@ -17,7 +17,9 @@ def test_assembler_includes_summary_and_all_experience_entries_and_order(tmp_pat
     )
     (bank_dir / "metadata" / "template_body_header.tex").write_text("% HEADER\n", encoding="utf-8")
     (bank_dir / "metadata" / "summary_section.tex").write_text("\\section{SUMMARY}\n\\small{Source summary.}\n", encoding="utf-8")
-    (bank_dir / "metadata" / "education_section.tex").write_text("\\section{EDUCATION}\n\\small{Source education.}\n", encoding="utf-8")
+    (bank_dir / "metadata" / "education_section.tex").write_text(
+        "\\section{EDUCATION}\n\\small{B.Tech (07/2019 - 06/2023)}\n", encoding="utf-8"
+    )
 
     bank = ExperienceBankIndex(
         bank_folder_name="b",
@@ -40,6 +42,11 @@ def test_assembler_includes_summary_and_all_experience_entries_and_order(tmp_pat
                 end_date="03/2026",
                 location="",
                 evidence_ids=["ev_nd"],
+                source_display_title="AI Engineer $|$ Freelancer",
+                source_subtitle="Computer Vision \\\\& Generative AI Systems Development",
+                source_start_date="07/2024",
+                source_end_date="03/2026",
+                source_location="",
             )
         ],
         projects=[],
@@ -66,6 +73,7 @@ def test_assembler_includes_summary_and_all_experience_entries_and_order(tmp_pat
         "\\section{SKILLS}"
     )
     assert assembled.latex.find("\\section{SKILLS}") < assembled.latex.find("\\section{EDUCATION}")
+    assert "B.Tech (07/2019 - 06/2023)" in assembled.latex
     assert "\\section{PROJECTS}" not in assembled.latex
     # Title/subtitle are preserved (not merged).
     assert "{AI Engineer $|$ Freelancer}" in assembled.latex
@@ -80,7 +88,9 @@ def test_assembler_does_not_drop_neilsoft_and_preserves_titles(tmp_path: Path):
     )
     (bank_dir / "metadata" / "template_body_header.tex").write_text("% HEADER\n", encoding="utf-8")
     (bank_dir / "metadata" / "summary_section.tex").write_text("\\section{SUMMARY}\n\\small{Source summary.}\n", encoding="utf-8")
-    (bank_dir / "metadata" / "education_section.tex").write_text("\\section{EDUCATION}\n\\small{Source education.}\n", encoding="utf-8")
+    (bank_dir / "metadata" / "education_section.tex").write_text(
+        "\\section{EDUCATION}\n\\small{B.Tech (07/2019 - 06/2023)}\n", encoding="utf-8"
+    )
 
     bank = ExperienceBankIndex(
         bank_folder_name="b",
@@ -115,6 +125,11 @@ def test_assembler_does_not_drop_neilsoft_and_preserves_titles(tmp_path: Path):
                 end_date="05/2026",
                 location="Pune, India",
                 evidence_ids=["ev_nd"],
+                source_display_title="Software Engineering Intern $|$ NDSoftTech Solutions",
+                source_subtitle="NDSS Internship",
+                source_start_date="03/2026",
+                source_end_date="05/2026",
+                source_location="Pune, India",
             ),
             WorkExperienceEntry(
                 entry_id="work_free",
@@ -124,6 +139,11 @@ def test_assembler_does_not_drop_neilsoft_and_preserves_titles(tmp_path: Path):
                 end_date="03/2026",
                 location="",
                 evidence_ids=["ev_free"],
+                source_display_title="AI Engineer $|$ Freelancer",
+                source_subtitle="Computer Vision \\\\& Generative AI Systems Development",
+                source_start_date="07/2024",
+                source_end_date="03/2026",
+                source_location="",
             ),
             WorkExperienceEntry(
                 entry_id="work_neil",
@@ -133,6 +153,11 @@ def test_assembler_does_not_drop_neilsoft_and_preserves_titles(tmp_path: Path):
                 end_date="07/2024",
                 location="Pune, India",
                 evidence_ids=["ev_neil"],
+                source_display_title="AI/ML Engineer $|$ Neilsoft",
+                source_subtitle="Computer Vision Engineering",
+                source_start_date="07/2023",
+                source_end_date="07/2024",
+                source_location="Pune, India",
             ),
         ],
         projects=[],
@@ -159,6 +184,9 @@ def test_assembler_does_not_drop_neilsoft_and_preserves_titles(tmp_path: Path):
     assert "AI/ML Engineer $|$ Neilsoft" in assembled.latex
     assert "AI Engineer $|$ Freelancer" in assembled.latex
     assert "Software Engineering Intern $|$ NDSoftTech Solutions" in assembled.latex
+    assert "03/2026 - 05/2026" in assembled.latex
+    assert "07/2024 - 03/2026" in assembled.latex
+    assert "07/2023 - 07/2024" in assembled.latex
 
     # Titles/subtitles are separate and preserved.
     assert "{AI Engineer $|$ Freelancer}" in assembled.latex

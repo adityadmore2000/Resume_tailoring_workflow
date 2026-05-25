@@ -38,7 +38,6 @@ def main() -> int:
     retrieved = retrieve(
         query=jd,
         bank_folder_name=paths.bank_folder_name,
-        vector_store_dir=paths.vector_store_dir,
         llm=llm,
         top_k=10,
     )

@@ -175,6 +175,14 @@ def extract_work_and_projects(parsed: ParsedResume, evidence_claims: list[Atomic
                         location="Unclear from resume",
                         source_text=sec.raw_text,
                         evidence_ids=all_ids,
+                        source_role_title="Unclear from resume",
+                        source_employment_type_or_label="",
+                        source_company="Unclear from resume",
+                        source_display_title="Unclear from resume",
+                        source_subtitle="Unclear from resume",
+                        source_start_date="Unclear from resume",
+                        source_end_date="Unclear from resume",
+                        source_location="Unclear from resume",
                     )
                 )
             break
@@ -205,6 +213,14 @@ def extract_work_and_projects(parsed: ParsedResume, evidence_claims: list[Atomic
                     location=location,
                     source_text=source_text,
                     evidence_ids=ev_ids,
+                    source_role_title=role_title,
+                    source_employment_type_or_label=employment_type_or_label,
+                    source_company=company,
+                    source_display_title=display_title,
+                    source_subtitle=subtitle,
+                    source_start_date=start_date,
+                    source_end_date=end_date,
+                    source_location=location,
                 )
             )
 

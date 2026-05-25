@@ -15,6 +15,7 @@ from app.llm import LLMProvider
 from app.rag.ingest import ingest_experience_bank
 from app.resume_parser.latex_parser import parse_latex_resume
 from app.resume_parser.text_parser import parse_plain_text_resume
+from app.tasks.task_progress import TASKS
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ def generate_experience_bank(
     cfg: AppConfig = DEFAULT_CONFIG,
     overwrite: bool = False,
     source_format: str = "latex",
+    task_id: str | None = None,
 ) -> BankBuildResult:
     data_root = Path(cfg.data_root)
     messages: list[str] = []
@@ -115,6 +117,8 @@ def generate_experience_bank(
     else:
         parsed = parse_latex_resume(resume_tex).parsed_resume
         messages.extend(parsed.warnings)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="resume_parsed")
 
     # Persist unchanged EDUCATION block for deterministic final layout.
     if source_format != "text":
@@ -140,9 +144,13 @@ def generate_experience_bank(
 
     # Build structured bank index (schema-driven, evidence-grounded)
     index = build_experience_bank_index(parsed, bank_folder_name=paths.bank_folder_name, source_format=source_format)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="experience_extracted")
     index = map_capabilities_from_resume(index, extracted_skills=parsed.extracted_skills)
 
     validation = validate_experience_bank(index)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="knowledge_structured")
     if validation.warnings:
         messages.extend(validation.warnings)
     if not validation.ok:
@@ -163,23 +171,31 @@ def generate_experience_bank(
     recs, ingest_warnings = ingest_experience_bank(
         bank_folder_name=paths.bank_folder_name,
         experience_bank_dir=paths.experience_bank_dir,
-        vector_store_dir=paths.vector_store_dir,
         llm=llm,
+        cfg=cfg,
     )
     messages.extend(ingest_warnings)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="bank_generated")
 
     # Update registry
     registry = BankRegistry(data_root / "experience_bank" / "banks_registry.json")
     entry = BankRegistryEntry(
         bank_folder_name=paths.bank_folder_name,
+        display_name=paths.bank_folder_name,
         original_resume_path=str(uploads_resume_path),
         experience_bank_path=str(paths.experience_bank_dir),
         vector_store_path=str(paths.vector_store_dir),
         source_format="latex",
         status="generated",
         notes="",
+        manually_modified=False,
     )
     registry.upsert(entry)
+    if task_id:
+        TASKS.advance(task_id=task_id, step_id="saved")
+        TASKS.set_result(task_id=task_id, result={"bank_folder_name": paths.bank_folder_name})
+        TASKS.complete(task_id=task_id)
 
     return BankBuildResult(
         bank_folder_name=paths.bank_folder_name,

@@ -15,6 +15,7 @@ def _now_iso() -> str:
 
 class BankRegistryEntry(BaseModel):
     bank_folder_name: str
+    display_name: str | None = None
     original_resume_path: str
     experience_bank_path: str
     vector_store_path: str
@@ -23,6 +24,7 @@ class BankRegistryEntry(BaseModel):
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
     notes: str = ""
+    manually_modified: bool = False
 
 
 @dataclass(frozen=True)
@@ -52,4 +54,3 @@ class BankRegistry:
         new_list = [e.model_dump() for e in by_name.values()]
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
         self.registry_path.write_text(json.dumps(new_list, indent=2), encoding="utf-8")
-
