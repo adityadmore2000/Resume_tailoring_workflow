@@ -121,6 +121,8 @@ def _render_projects_macros(
     verified_ids: set[str],
     max_bullets_per_project: int = 4,
 ) -> str:
+    if not projects:
+        return ""
     lines: list[str] = []
     lines.append(r"\section{PROJECTS}")
     lines.append(r"\resumeSubHeadingListStart")
@@ -356,7 +358,7 @@ def assemble_from_bank(
     skills_block, skill_categories = _build_skills(bank_index=bank_index, used_evidence_ids=used_evidence_ids, jd=jd)
 
     # Build LaTeX with deterministic section order:
-    # HEADER (unchanged) -> SUMMARY -> EXPERIENCE -> PROJECTS -> SKILLS -> EDUCATION (unchanged)
+    # HEADER (unchanged) -> SUMMARY -> EXPERIENCE -> (PROJECTS?) -> SKILLS -> EDUCATION (unchanged)
     pre, _ = _ensure_document_wrapped(template_preamble or "")
     out: list[str] = [pre.rstrip(), ""]
     if template_header:
@@ -373,7 +375,13 @@ def assemble_from_bank(
                 bullet_ids_by_entry_id=bullet_ids_by_entry_id,
             )
         )
-        out.append(_render_projects_macros(projects=proj_entries, evidence_latex_by_id=evidence_latex_by_id, verified_ids=verified_ids))
+        projects_block = _render_projects_macros(
+            projects=proj_entries,
+            evidence_latex_by_id=evidence_latex_by_id,
+            verified_ids=verified_ids,
+        )
+        if projects_block.strip():
+            out.append(projects_block)
     else:
         # Generic fallback layout (still enforces fixed section order).
         out.append("\\section{EXPERIENCE}\n\\begin{itemize}\n")
@@ -389,14 +397,15 @@ def assemble_from_bank(
             out.append("  \\end{itemize}")
         out.append("\\end{itemize}\n")
 
-        out.append("\\section{PROJECTS}\n\\begin{itemize}\n")
-        for p in proj_entries:
-            out.append(f"  \\item \\textbf{{{_sanitize_inline_latex(p.name)}}}")
-            out.append("  \\begin{itemize}")
-            for eid in [x for x in p.evidence_ids if x in verified_ids][:4]:
-                out.append(f"    \\item {_sanitize_inline_latex(evidence_latex_by_id.get(eid, ''))}")
-            out.append("  \\end{itemize}")
-        out.append("\\end{itemize}\n")
+        if proj_entries:
+            out.append("\\section{PROJECTS}\n\\begin{itemize}\n")
+            for p in proj_entries:
+                out.append(f"  \\item \\textbf{{{_sanitize_inline_latex(p.name)}}}")
+                out.append("  \\begin{itemize}")
+                for eid in [x for x in p.evidence_ids if x in verified_ids][:4]:
+                    out.append(f"    \\item {_sanitize_inline_latex(evidence_latex_by_id.get(eid, ''))}")
+                out.append("  \\end{itemize}")
+            out.append("\\end{itemize}\n")
 
     out.append(skills_block)
     out.append(education_block.strip() + "\n")
@@ -415,13 +424,16 @@ def assemble_from_bank(
     md_skills_lines: list[str] = []
     for cat in skill_categories:
         md_skills_lines.append(f"- **{cat.name}:** " + ", ".join([s.name for s in cat.skills]))
-    md = (
-        "## SUMMARY\n" + ("\n".join(f"- {x}" for x in md_sections["summary"]) + "\n\n" if md_sections["summary"] else "\n")
-        + "## EXPERIENCE\n" + "\n".join(f"- {x}" for x in md_sections["experience"]) + "\n\n"
-        + "## PROJECTS\n" + "\n".join(f"- {p.name}" for p in proj_entries) + "\n\n"
-        + "## SKILLS\n" + ("\n".join(md_skills_lines) if md_skills_lines else "- Unclear from resume.") + "\n"
-        + "## EDUCATION\n" + (education_block.strip()[:400] if education_block else "") + "\n"
+    md_parts: list[str] = []
+    md_parts.append(
+        "## SUMMARY\n" + ("\n".join(f"- {x}" for x in md_sections["summary"]) + "\n" if md_sections["summary"] else "") + "\n"
     )
+    md_parts.append("## EXPERIENCE\n" + "\n".join(f"- {x}" for x in md_sections["experience"]) + "\n\n")
+    if proj_entries:
+        md_parts.append("## PROJECTS\n" + "\n".join(f"- {p.name}" for p in proj_entries) + "\n\n")
+    md_parts.append("## SKILLS\n" + ("\n".join(md_skills_lines) if md_skills_lines else "- Unclear from resume.") + "\n")
+    md_parts.append("## EDUCATION\n" + (education_block.strip()[:400] if education_block else "") + "\n")
+    md = "".join(md_parts)
     txt = _render_text(
         {
             "summary": md_sections["summary"],
@@ -435,6 +447,7 @@ def assemble_from_bank(
         latex=latex,
         work_entries=exp_entries,
         source_work_entry_count=len(bank_index.work_experience),
+        project_entry_count=len(proj_entries),
         has_macros=has_macros,
     )
     return AssembledResume(latex=latex, markdown=md, text=txt, used_evidence_ids=used_evidence_ids, messages=messages)
@@ -483,9 +496,13 @@ def _validate_assembled_resume(
     latex: str,
     work_entries: list[WorkExperienceEntry],
     source_work_entry_count: int,
+    project_entry_count: int,
     has_macros: bool,
 ) -> None:
-    required = ["SUMMARY", "EXPERIENCE", "PROJECTS", "SKILLS", "EDUCATION"]
+    required = ["SUMMARY", "EXPERIENCE"]
+    if project_entry_count > 0:
+        required.append("PROJECTS")
+    required.extend(["SKILLS", "EDUCATION"])
     positions = []
     for sec in required:
         tok = f"\\section{{{sec}}}"
@@ -494,13 +511,18 @@ def _validate_assembled_resume(
             raise ValueError(f"Required section missing in assembled resume: {sec}")
         positions.append((i, sec))
     if positions != sorted(positions, key=lambda x: x[0]):
-        raise ValueError("Section order is not deterministic (expected HEADER → SUMMARY → EXPERIENCE → PROJECTS → SKILLS → EDUCATION).")
+        raise ValueError(
+            "Section order is not deterministic (expected HEADER → SUMMARY → EXPERIENCE → (PROJECTS?) → SKILLS → EDUCATION)."
+        )
 
     if has_macros:
         exp_start = latex.find("\\section{EXPERIENCE}")
-        proj_start = latex.find("\\section{PROJECTS}")
-        if exp_start != -1 and proj_start != -1 and proj_start > exp_start:
-            exp_block = latex[exp_start:proj_start]
+        if project_entry_count > 0:
+            exp_end = latex.find("\\section{PROJECTS}")
+        else:
+            exp_end = latex.find("\\section{SKILLS}")
+        if exp_start != -1 and exp_end != -1 and exp_end > exp_start:
+            exp_block = latex[exp_start:exp_end]
             rendered = exp_block.count("\\resumeSubheading")
         else:
             rendered = latex.count("\\resumeSubheading")
