@@ -7,8 +7,8 @@ Outlines what you need to deploy the workflow UI + API.
 Deployments should preserve the workflow UX and keep evidence artifacts durable and auditable.
 
 ## Step-by-step usage
-1. Run the Streamlit UI as a service (container or VM).
-2. Run the FastAPI server (optional, but recommended for integrations).
+1. Deploy the Next.js frontend (`resume-tailor-frontend`) as a separate service (e.g. Vercel).
+2. Deploy this FastAPI backend as a separate service (e.g. Render/Railway/Fly.io or Docker).
 3. Persist `data/` (Experience Banks, vector stores, generated resumes) using durable storage.
 
 ## What happens internally
@@ -21,4 +21,3 @@ Deployments should preserve the workflow UX and keep evidence artifacts durable 
 
 ## Recommended next steps
 - Add monitoring for compilation failures and storage usage.
-

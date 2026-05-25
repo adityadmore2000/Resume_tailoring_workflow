@@ -1,23 +1,45 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+    environment:
+      FRONTEND_URL: http://localhost:3000
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: resume_tailor_chunks
+      LLM_PROVIDER: ollama
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: llama3.1:8b
+      OLLAMA_EMBED_MODEL: nomic-embed-text
     ports:
       - "8000:8000"
-    volumes:
-      - ./:/app
-    environment:
-      - DATA_ROOT=data
+    depends_on:
+      - qdrant
 
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ../resume-tailor-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
       - backend
-    environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  qdrant_data:
+  ollama_data:
 

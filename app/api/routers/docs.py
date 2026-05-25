@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/api/docs", tags=["docs"])
 
-_DOCS_DIR = (Path(__file__).resolve().parents[2] / "docs").resolve()
+_DOCS_DIR = (Path(__file__).resolve().parents[3] / "docs").resolve()
 
 
 def _slug_for_path(p: Path) -> str:
@@ -41,4 +41,3 @@ def api_get_doc(slug: str) -> dict:
         raise HTTPException(status_code=404, detail="Doc not found")
     text = p.read_text(encoding="utf-8", errors="replace")
     return {"slug": slug, "title": _title_for_markdown(text, fallback=slug), "content": text}
-

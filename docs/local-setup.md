@@ -13,9 +13,9 @@ Local runs are useful for fast iteration on your Experience Banks and tailoring 
    - `pip install -r requirements.txt`
 2. Configure environment variables (copy `.env.example`).
 3. Run the backend API:
-   - `uvicorn backend.main:app --reload --port 8000`
+   - `uvicorn app.main:app --reload --port 8000`
 4. Run the frontend UI:
-   - `cd frontend && npm install && npm run dev`
+   - In a separate checkout: `cd ../resume-tailor-frontend && npm install && npm run dev`
 
 ## What happens internally
 - Next.js runs the guided workflow UI (the only supported user-facing UI).

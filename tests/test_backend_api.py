@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from backend.main import create_app
+from app.main import create_app
 
 
 def test_health_ok():
@@ -38,4 +38,3 @@ def test_banks_list_shape():
     data = r.json()
     assert "banks" in data
     assert isinstance(data["banks"], list)
-

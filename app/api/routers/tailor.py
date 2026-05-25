@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.services.tailor_service import TailorError, tailor_resume_from_bank
+from app.api.services.tailor_service import TailorError, tailor_resume_from_bank
 
 router = APIRouter(prefix="/api", tags=["tailor"])
 
