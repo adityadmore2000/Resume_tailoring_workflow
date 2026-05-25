@@ -14,12 +14,16 @@ Recruiters care about evidence-backed claims. An Experience Bank turns a master 
 5. Go to **Preview Experience Bank** to review the extracted content.
 
 ## What happens internally
-- The resume is parsed and transformed into:
-  - **Evidence claims** (atomic, verifiable statements)
-  - **Work experience entries**
-  - **Projects**
-  - **Capabilities/tools/domains**
-- KB pages are written and embedded into a per-bank vector store for retrieval.
+- The system treats a bank as a resume knowledge base with three layers:
+  - **KBRecord**: the reusable/editable professional unit (e.g. work experience, project, summary, education, capability, reusable bullet).
+  - **EvidenceClaim**: an atomic factual support extracted from the source resume.
+  - **QdrantPoint**: a semantic-search index entry for a KBRecord/EvidenceClaim.
+
+## Editing model (AI-safe)
+- Users edit **KBRecords** via the **AI Bank Editor** (natural-language instructions).
+- The AI proposes a change, the system validates it against **EvidenceClaims**, and only then the user can approve it.
+- **Source-of-truth factual fields are immutable by default** (company, role title, dates, location, education, explicit metrics).
+- Qdrant is a retrieval index only; it is not the trusted editable truth store.
 
 ## Common mistakes
 - Using unstable bank names (you’ll reuse the name during tailoring).
@@ -28,4 +32,3 @@ Recruiters care about evidence-backed claims. An Experience Bank turns a master 
 
 ## Recommended next steps
 - Preview the bank to confirm evidence looks correct → Tailor a resume using that bank.
-

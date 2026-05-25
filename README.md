@@ -9,6 +9,7 @@ FastAPI backend for Resume Tailor (AI/RAG/Experience Banks/LaTeX/PDF). This repo
    - `python -m pip install -r requirements.txt`
 2. Configure environment:
    - `cp .env.example .env` and edit values as needed
+   - The backend auto-loads `.env` on startup (OS environment variables still take precedence).
 3. Run the API:
    - `uvicorn app.main:app --reload --port 8000`
 
@@ -34,11 +35,16 @@ Experience Banks:
 - `GET /api/banks`
 - `POST /api/banks`
 - `GET /api/banks/{bank_name}`
+- `DELETE /api/banks/{bank_name}`
 - `GET /api/banks/{bank_name}/files`
 - `GET /api/banks/{bank_name}/files/content?path=...`
 - `PUT /api/banks/{bank_name}/metadata`
 - `PUT /api/banks/{bank_name}/files/content`
 - `POST /api/banks/{bank_name}/reingest`
+- `POST /api/banks/{bank_name}/edit/propose`
+- `POST /api/banks/{bank_name}/edit/{proposal_id}/apply`
+- `POST /api/banks/{bank_name}/edit/{proposal_id}/reject`
+- `GET /api/banks/{bank_name}/edit/history`
 
 Tailoring:
 - `POST /api/tailor`

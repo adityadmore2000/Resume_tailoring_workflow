@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
+import shutil
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -13,6 +14,15 @@ from app.config import DEFAULT_CONFIG
 from app.llm import LLMError
 from app.llm.factory import build_llm_provider
 from app.rag.ingest import ingest_experience_bank
+from app.rag.qdrant_store import QdrantConfig, count_points_for_bank, delete_points_for_bank, get_client
+from app.bank_editing.models import (
+    BankEditApplyResponse,
+    BankEditHistoryResponse,
+    BankEditProposeRequest,
+    BankEditProposeResponse,
+    BankEditRejectResponse,
+)
+from app.bank_editing.service import apply_bank_edit, list_bank_edit_history, propose_bank_edit, reject_bank_edit
 from app.ui.api.bank_preview_api import compute_stats
 from app.ui.api.experience_banks_api import (
     ExperienceBankAPIError,
@@ -267,3 +277,81 @@ def api_reingest_bank(bank_name: str, background_tasks: BackgroundTasks) -> dict
 
     background_tasks.add_task(_run)
     return {"task_id": progress.task_id, "status": "running", "bank_folder_name": paths.bank_folder_name}
+
+
+@router.delete("/{bank_name}")
+def api_delete_bank(bank_name: str) -> dict:
+    """Delete an Experience Bank and its retrieval index.
+
+    Safety:
+    - Validates and slugifies bank name.
+    - Deletes only within known bank subfolders.
+    - Qdrant deletion is scoped by mandatory bank_folder_name filter.
+    """
+
+    data_root = Path(DEFAULT_CONFIG.data_root)
+    try:
+        paths = get_bank_paths(data_root, bank_name)
+    except BankFolderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    registry_path = data_root / "experience_bank" / "banks_registry.json"
+    registry = BankRegistry(registry_path)
+    entries = registry.load()
+    existing = next((e for e in entries if e.bank_folder_name == paths.bank_folder_name), None)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Bank not found")
+
+    deleted_files = False
+    for d in [paths.experience_bank_dir, paths.vector_store_dir, paths.uploads_dir]:
+        if d.exists():
+            shutil.rmtree(d)
+            deleted_files = True
+
+    # Remove registry entry.
+    remaining = [e for e in entries if e.bank_folder_name != paths.bank_folder_name]
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(
+        "[\n" + ",\n".join([e.model_dump_json(indent=2) for e in remaining]) + "\n]" if remaining else "[]",
+        encoding="utf-8",
+    )
+
+    deleted_qdrant_points: int | None = None
+    qdrant_url = (DEFAULT_CONFIG.qdrant_url or "").strip()
+    if qdrant_url:
+        try:
+            qc = QdrantConfig(url=qdrant_url, collection=DEFAULT_CONFIG.qdrant_collection)
+            client = get_client(qc)
+            deleted_qdrant_points = count_points_for_bank(
+                client=client, collection=qc.collection, bank_folder_name=paths.bank_folder_name
+            )
+            delete_points_for_bank(client=client, collection=qc.collection, bank_folder_name=paths.bank_folder_name)
+        except Exception:
+            deleted_qdrant_points = None
+
+    return {
+        "bank_name": paths.bank_folder_name,
+        "deleted": True,
+        "deleted_qdrant_points": deleted_qdrant_points,
+        "deleted_files": deleted_files,
+    }
+
+
+@router.post("/{bank_name}/edit/propose", response_model=BankEditProposeResponse)
+def api_propose_bank_edit(bank_name: str, body: BankEditProposeRequest) -> BankEditProposeResponse:
+    return propose_bank_edit(bank_name=bank_name, req=body)
+
+
+@router.post("/{bank_name}/edit/{proposal_id}/apply", response_model=BankEditApplyResponse)
+def api_apply_bank_edit(bank_name: str, proposal_id: str) -> BankEditApplyResponse:
+    return apply_bank_edit(bank_name=bank_name, proposal_id=proposal_id)
+
+
+@router.post("/{bank_name}/edit/{proposal_id}/reject", response_model=BankEditRejectResponse)
+def api_reject_bank_edit(bank_name: str, proposal_id: str) -> BankEditRejectResponse:
+    return reject_bank_edit(bank_name=bank_name, proposal_id=proposal_id)
+
+
+@router.get("/{bank_name}/edit/history", response_model=BankEditHistoryResponse)
+def api_bank_edit_history(bank_name: str) -> BankEditHistoryResponse:
+    return list_bank_edit_history(bank_name=bank_name)

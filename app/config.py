@@ -4,6 +4,29 @@ import os
 from dataclasses import dataclass
 from typing import Mapping, Literal
 
+from dotenv import load_dotenv
+
+
+def _load_dotenv_early() -> None:
+    """Load `.env` as a convenience for local dev.
+
+    - Does not override existing OS env vars.
+    - Prefers a `.env` in the current working directory.
+    """
+
+    try:
+        cwd_env = os.path.join(os.getcwd(), ".env")
+        if os.path.exists(cwd_env):
+            load_dotenv(dotenv_path=cwd_env, override=False)
+        else:
+            load_dotenv(override=False)
+    except Exception:
+        # Config import must remain safe even if dotenv loading fails.
+        return
+
+
+_load_dotenv_early()
+
 
 @dataclass(frozen=True)
 class AppConfig:

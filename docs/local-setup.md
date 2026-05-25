@@ -12,6 +12,7 @@ Local runs are useful for fast iteration on your Experience Banks and tailoring 
    - `source .venv/bin/activate`
    - `pip install -r requirements.txt`
 2. Configure environment variables (copy `.env.example`).
+   - The backend auto-loads `.env` on startup (OS environment variables still take precedence).
 3. Run the backend API:
    - `uvicorn app.main:app --reload --port 8000`
 4. Run the frontend UI:
