@@ -19,6 +19,37 @@ class AssembledResume:
     messages: list[str]
 
 
+class SourceOfTruthError(ValueError):
+    pass
+
+
+def _enforce_truth_source(work_entries: list[WorkExperienceEntry]) -> list[WorkExperienceEntry]:
+    """
+    Ensure factual source-of-truth fields are immutable.
+
+    If an entry has `source_*` fields, we deterministically copy them back onto the mutable fields.
+    If an entry is missing `source_*` fields, we reject because we cannot validate immutability.
+    """
+    fixed: list[WorkExperienceEntry] = []
+    for w in work_entries:
+        if w.source_display_title is None or w.source_start_date is None or w.source_end_date is None:
+            raise SourceOfTruthError(f"Missing source-of-truth fields for entry_id='{w.entry_id}'. Rebuild the bank.")
+        update = {
+            "role_title": w.source_role_title if w.source_role_title is not None else w.role_title,
+            "employment_type_or_label": (
+                w.source_employment_type_or_label if w.source_employment_type_or_label is not None else w.employment_type_or_label
+            ),
+            "company": w.source_company if w.source_company is not None else w.company,
+            "display_title": w.source_display_title,
+            "subtitle": w.source_subtitle if w.source_subtitle is not None else w.subtitle,
+            "start_date": w.source_start_date,
+            "end_date": w.source_end_date,
+            "location": w.source_location if w.source_location is not None else w.location,
+        }
+        fixed.append(w.model_copy(update=update))
+    return fixed
+
+
 def _sanitize_inline_latex(s: str) -> str:
     # Preserve inline LaTeX, but strip structural tokens that could break layout.
     s = (s or "").strip()
@@ -325,6 +356,7 @@ def assemble_from_bank(
         evidence_text_by_id=evidence_text_by_id,
         jd=jd,
     )
+    exp_entries = _enforce_truth_source(exp_entries)
     proj_entries = _select_projects(
         projects=bank_index.projects,
         evidence_text_by_id=evidence_text_by_id,
@@ -482,10 +514,25 @@ def load_bank_index(bank_dir: Path) -> ExperienceBankIndex:
                     "end_date": date_range.split("-", 1)[1].strip() if "-" in date_range else "Unclear from resume",
                     "location": location,
                     "evidence_ids": w.get("evidence_ids") or [],
+                    "source_display_title": display_title,
+                    "source_subtitle": subtitle,
+                    "source_start_date": date_range.split("-", 1)[0].strip() if "-" in date_range else date_range,
+                    "source_end_date": date_range.split("-", 1)[1].strip() if "-" in date_range else "Unclear from resume",
+                    "source_location": location,
                 }
             )
         else:
-            migrated.append(w)
+            ww = dict(w)
+            # Backfill immutable source-of-truth fields for older banks.
+            ww.setdefault("source_role_title", ww.get("role_title"))
+            ww.setdefault("source_employment_type_or_label", ww.get("employment_type_or_label"))
+            ww.setdefault("source_company", ww.get("company"))
+            ww.setdefault("source_display_title", ww.get("display_title"))
+            ww.setdefault("source_subtitle", ww.get("subtitle"))
+            ww.setdefault("source_start_date", ww.get("start_date"))
+            ww.setdefault("source_end_date", ww.get("end_date"))
+            ww.setdefault("source_location", ww.get("location"))
+            migrated.append(ww)
     data["work_experience"] = migrated
 
     return ExperienceBankIndex.model_validate(data)
@@ -535,3 +582,17 @@ def _validate_assembled_resume(
             raise ValueError(f"Experience title not preserved in output: {w.display_title}")
         if w.subtitle and w.subtitle not in latex:
             raise ValueError(f"Experience subtitle not preserved in output: {w.subtitle}")
+
+        # Truth-source enforcement: dates must match exactly what the Experience Bank stored.
+        if w.source_start_date is not None and w.source_start_date != w.start_date:
+            raise SourceOfTruthError(f"Start date mismatch for '{w.display_title}': '{w.start_date}' != '{w.source_start_date}'")
+        if w.source_end_date is not None and w.source_end_date != w.end_date:
+            raise SourceOfTruthError(f"End date mismatch for '{w.display_title}': '{w.end_date}' != '{w.source_end_date}'")
+        if w.source_display_title is not None and w.source_display_title != w.display_title:
+            raise SourceOfTruthError(f"Display title mismatch for entry_id='{w.entry_id}'")
+        if w.source_location is not None and w.source_location != w.location:
+            raise SourceOfTruthError(f"Location mismatch for '{w.display_title}': '{w.location}' != '{w.source_location}'")
+
+        expected_date_range = f"{w.source_start_date} - {w.source_end_date}".strip() if w.source_start_date and w.source_end_date else ""
+        if expected_date_range and expected_date_range not in latex:
+            raise SourceOfTruthError(f"Date range not preserved in output for '{w.display_title}': '{expected_date_range}'")
