@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import String
+from sqlalchemy import Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,7 @@ class Resume(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = uuid_pk()
 
+    slug: Mapped[str] = mapped_column(String(128), nullable=False)
     title: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
 
@@ -22,3 +23,5 @@ class Resume(Base, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    __table_args__ = (Index("ux_resumes_slug", "slug", unique=True),)

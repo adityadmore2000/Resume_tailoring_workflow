@@ -10,7 +10,7 @@ from sqlalchemy import select
 async def test_create_resume_and_nodes(db_session):
     from app.db.models import Resume, ResumeNode
 
-    resume = Resume(title="My Resume", metadata_={"source": "test"})
+    resume = Resume(slug="my-resume", title="My Resume", metadata_={"source": "test"})
     db_session.add(resume)
     await db_session.commit()
     await db_session.refresh(resume)
@@ -50,7 +50,7 @@ async def test_create_resume_and_nodes(db_session):
 async def test_fetch_nodes_by_resume_id(db_session):
     from app.db.models import Resume, ResumeNode
 
-    resume = Resume(title="R", metadata_={})
+    resume = Resume(slug="r", title="R", metadata_={})
     db_session.add(resume)
     await db_session.commit()
     await db_session.refresh(resume)

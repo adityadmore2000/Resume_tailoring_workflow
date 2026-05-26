@@ -11,7 +11,7 @@ from app.resume_tree.service import NodeCreate, NodePatch, ResumeTreeService
 
 
 async def _make_resume_with_root(db_session) -> tuple[uuid.UUID, uuid.UUID]:
-    resume = Resume(title="R", metadata_={})
+    resume = Resume(slug="r", title="R", metadata_={})
     db_session.add(resume)
     await db_session.commit()
     await db_session.refresh(resume)
@@ -160,4 +160,3 @@ async def test_retrieve_full_resume_tree(db_session):
     assert tree["resume_id"] == str(resume_id)
     assert len(tree["roots"]) == 1
     assert tree["roots"][0]["id"] == str(root_id)
-
