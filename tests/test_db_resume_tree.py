@@ -1,46 +1,9 @@
 from __future__ import annotations
 
-import os
 import uuid
-from pathlib import Path
 
 import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import select, text
-
-
-def _test_database_url() -> str | None:
-    url = (os.environ.get("TEST_DATABASE_URL") or "").strip()
-    return url or None
-
-
-@pytest.fixture(scope="session")
-def db_url() -> str:
-    url = _test_database_url()
-    if not url:
-        pytest.skip("Set TEST_DATABASE_URL (or DATABASE_URL) to run Postgres-backed DB tests.")
-    return url
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _run_migrations(db_url: str) -> None:
-    os.environ["DATABASE_URL"] = db_url
-    repo_root = Path(__file__).resolve().parents[1]
-    cfg = Config(str(repo_root / "alembic.ini"))
-    command.upgrade(cfg, "head")
-
-
-@pytest.fixture()
-async def db_session(db_url: str, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("DATABASE_URL", db_url)
-    from app.db.session import get_sessionmaker
-
-    sessionmaker = get_sessionmaker()
-    async with sessionmaker() as session:
-        await session.execute(text("TRUNCATE resume_nodes, resumes RESTART IDENTITY CASCADE"))
-        await session.commit()
-        yield session
+from sqlalchemy import select
 
 
 @pytest.mark.asyncio
