@@ -3,10 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.banks_pg.service import BanksService, slugify_bank_name
 from app.db.deps import get_db_session
 from app.db.session import get_sessionmaker
+from app.db.models import ResumeNode
 from app.resume_tree.service import ResumeTreeService
 from app.tasks.task_progress import TASKS
 
@@ -132,15 +134,96 @@ async def api_get_bank_tree(bank_name: str, session: AsyncSession = Depends(get_
     return await tsvc.retrieve_full_resume_tree(r.id)
 
 
+class BankItemSummary(BaseModel):
+    id: str
+    type: str
+    title: str
+    raw_path: str = ""
+    domains: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
+    date_range: str = ""
+    location: str = ""
+
+
+def _map_section_to_item_type(section_name: str) -> str:
+    t = (section_name or "").strip().casefold()
+    if "experience" in t or "work" in t:
+        return "work_experience"
+    if "project" in t:
+        return "project"
+    if "summary" in t:
+        return "summary"
+    if "skill" in t:
+        return "capability"
+    return "capability"
+
+
+@router.get("/{bank_name}/items")
+async def api_list_bank_items(bank_name: str, session: AsyncSession = Depends(get_db_session)) -> dict:
+    slug = slugify_bank_name(bank_name)
+    bsvc = BanksService(session)
+    r = await bsvc.get_resume_by_slug(slug)
+    if not r:
+        raise HTTPException(status_code=404, detail="Bank not found")
+
+    nodes = (
+        await session.execute(
+            select(ResumeNode)
+            .where(ResumeNode.resume_id == r.id)
+            .order_by(ResumeNode.parent_id.nullsfirst(), ResumeNode.order_index, ResumeNode.created_at)
+        )
+    ).scalars().all()
+    by_id = {n.id: n for n in nodes}
+
+    def _nearest_section(n: ResumeNode) -> ResumeNode | None:
+        cur = n
+        seen: set[object] = set()
+        while cur.parent_id is not None and cur.parent_id not in seen:
+            seen.add(cur.parent_id)
+            p = by_id.get(cur.parent_id)
+            if p is None:
+                return None
+            if p.node_type == "section":
+                return p
+            cur = p
+        return None
+
+    items: list[dict] = []
+    for n in nodes:
+        if n.node_type not in {"detail", "bullet", "experience", "project", "summary", "capability", "skill_group", "reusable_block"}:
+            continue
+        if n.node_type == "detail" and not (n.metadata_ or {}).get("searchable", False):
+            continue
+
+        sec = _nearest_section(n)
+        sec_name = ""
+        if sec is not None:
+            sec_name = str((sec.content or {}).get("section_name") or sec.title or "")
+
+        md = n.metadata_ or {}
+        tools = md.get("tools") if isinstance(md, dict) else None
+
+        title = n.title or ""
+        if not title and isinstance(n.content, dict):
+            title = str(n.content.get("plain") or n.content.get("text") or n.content.get("latex") or "")
+        title = (title or "").strip() or "Untitled"
+
+        items.append(
+            BankItemSummary(
+                id=str(n.id),
+                type=_map_section_to_item_type(sec_name) if sec_name else n.node_type,
+                title=title,
+                tools=[str(t).strip() for t in (tools or []) if str(t).strip()] if isinstance(tools, list) else [],
+            ).model_dump()
+        )
+
+    return {"items": items}
+
+
 # Legacy endpoints are intentionally disabled in Postgres source-of-truth mode.
 @router.get("/{bank_name}/files")
 def api_list_bank_files(bank_name: str) -> dict:
     raise HTTPException(status_code=501, detail="Bank files API is disabled (Postgres is runtime source-of-truth).")
-
-
-@router.get("/{bank_name}/items")
-def api_list_bank_items(bank_name: str) -> dict:
-    raise HTTPException(status_code=501, detail="Bank items API is disabled (Postgres is runtime source-of-truth).")
 
 
 @router.delete("/{bank_name}")

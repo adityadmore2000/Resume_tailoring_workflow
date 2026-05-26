@@ -30,8 +30,9 @@ class NodePatch:
 
 
 class ResumeTreeService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, semantic_index=None):
         self._session = session
+        self._semantic_index = semantic_index
 
     async def insert_node(self, parent_id: uuid.UUID, node_data: NodeCreate) -> ResumeNode:
         parent = await self._get_node(parent_id)
@@ -54,6 +55,8 @@ class ResumeTreeService:
         self._session.add(node)
         await self._session.commit()
         await self._session.refresh(node)
+        if self._semantic_index is not None:
+            self._semantic_index.upsert_node(node)
         return node
 
     async def update_node(self, node_id: uuid.UUID, patch: NodePatch) -> ResumeNode:
@@ -83,6 +86,8 @@ class ResumeTreeService:
         )
         await self._session.commit()
         await self._session.refresh(node)
+        if self._semantic_index is not None:
+            self._semantic_index.upsert_node(node)
         return node
 
     async def delete_node(self, node_id: uuid.UUID) -> None:
@@ -98,6 +103,8 @@ class ResumeTreeService:
 
         await self._session.execute(delete(ResumeNode).where(ResumeNode.id == node_id))
         await self._session.commit()
+        if self._semantic_index is not None:
+            self._semantic_index.delete_nodes([node_id])
 
     async def delete_subtree(self, node_id: uuid.UUID) -> None:
         node = await self._get_node(node_id)
@@ -107,6 +114,8 @@ class ResumeTreeService:
         descendant_ids = await self._descendant_ids(node_id)
         await self._session.execute(delete(ResumeNode).where(ResumeNode.id.in_(descendant_ids)))
         await self._session.commit()
+        if self._semantic_index is not None:
+            self._semantic_index.delete_nodes(descendant_ids)
 
     async def move_node(self, node_id: uuid.UUID, new_parent_id: uuid.UUID, new_order_index: int) -> ResumeNode:
         node = await self._get_node(node_id)
@@ -131,6 +140,8 @@ class ResumeTreeService:
         )
         await self._session.commit()
         await self._session.refresh(node)
+        if self._semantic_index is not None:
+            self._semantic_index.upsert_node(node)
         return node
 
     async def reorder_children(self, parent_id: uuid.UUID, ordered_node_ids: list[uuid.UUID]) -> None:

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
-from app.bank_generator.folder_manager import get_bank_paths
 from app.config import DEFAULT_CONFIG
+from app.banks_pg.service import slugify_bank_name
 from app.generated_resumes.latex_compiler import LatexCompileError, compile_resume_latex
 from app.generated_resumes.resume_store import init_generated_resume, new_resume_id
 from app.llm.factory import build_llm_provider
@@ -35,9 +34,13 @@ def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str, task_id: str
     cfg = DEFAULT_CONFIG
     llm = build_llm_provider(cfg)
 
-    paths = get_bank_paths(Path(cfg.data_root), bank_folder_name)
-    if not paths.experience_bank_dir.exists():
-        raise TailorError("Bank not found")
+    # Phase 4: Experience Banks are stored in Postgres (`resumes`/`resume_nodes`).
+    # Bank existence is validated in the `/api/tailor` router.
+    # The legacy file-based tailoring pipeline (bank folders + bank_index.json) is intentionally not used here.
+    raise TailorError(
+        "Tailoring is not yet migrated to Postgres-backed resume trees in this phase. "
+        "Upgrade tailoring to read from `resume_nodes` (Phase 5)."
+    )
 
     bank_index = load_bank_index(paths.experience_bank_dir)
     if task_id:
