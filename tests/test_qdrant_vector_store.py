@@ -9,7 +9,7 @@ import app.config as config_mod
 import app.rag.ingest as ingest_mod
 import app.rag.retriever as retriever_mod
 from app.rag.ingest import ingest_experience_bank
-from app.rag.qdrant_store import QdrantConfig, count_points_for_bank, ensure_collection, get_client, healthcheck
+from app.rag.qdrant_store import QdrantConfig, count_points_for_bank, get_client, healthcheck, upsert_points
 
 
 class DummyLLM:
@@ -51,22 +51,43 @@ def test_ingestion_writes_points_to_qdrant_and_creates_no_jsonl(tmp_path: Path, 
 
     qc = QdrantConfig(url=config_mod.DEFAULT_CONFIG.qdrant_url or "", collection=config_mod.DEFAULT_CONFIG.qdrant_collection)
     client = get_client(qc)
-    ensure_collection(client=client, collection=qc.collection, vector_size=8)
     assert count_points_for_bank(client=client, collection=qc.collection, bank_folder_name="bank_a") > 0
+
+
+def test_upsert_auto_creates_collection(monkeypatch):
+    _set_in_memory_qdrant(monkeypatch, collection="autocreate")
+    qc = QdrantConfig(url=config_mod.DEFAULT_CONFIG.qdrant_url or "", collection=config_mod.DEFAULT_CONFIG.qdrant_collection)
+    client = get_client(qc)
+
+    from qdrant_client.http.models import PointStruct
+    import uuid
+
+    upsert_points(
+        client=client,
+        collection=qc.collection,
+        points=[
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=[0.1] * 8,
+                payload={"bank_folder_name": "bank_a", "chunk_id": "a1", "text": "x", "evidence_ids": []},
+            )
+        ],
+    )
+    assert count_points_for_bank(client=client, collection=qc.collection, bank_folder_name="bank_a") == 1
 
 
 def test_retrieval_is_scoped_by_bank_folder_name(monkeypatch):
     _set_in_memory_qdrant(monkeypatch, collection="scope")
     qc = QdrantConfig(url=config_mod.DEFAULT_CONFIG.qdrant_url or "", collection=config_mod.DEFAULT_CONFIG.qdrant_collection)
     client = get_client(qc)
-    ensure_collection(client=client, collection=qc.collection, vector_size=8)
 
     # Seed points for two banks.
     from qdrant_client.http.models import PointStruct
     import uuid
 
-    client.upsert(
-        collection_name=qc.collection,
+    upsert_points(
+        client=client,
+        collection=qc.collection,
         points=[
             PointStruct(
                 id=str(uuid.uuid4()),

@@ -10,6 +10,7 @@ FastAPI backend for Resume Tailor (AI/RAG/Experience Banks/LaTeX/PDF). This repo
 2. Configure environment:
    - `cp .env.example .env` and edit values as needed
    - The backend auto-loads `.env` on startup (OS environment variables still take precedence).
+   - For Postgres runtime, either run migrations once with `alembic upgrade head` or set `AUTO_MIGRATE=true`.
 3. Run the API:
    - `uvicorn app.main:app --reload --port 8000`
 
@@ -35,12 +36,7 @@ Experience Banks:
 - `GET /api/banks`
 - `POST /api/banks`
 - `GET /api/banks/{bank_name}`
-- `DELETE /api/banks/{bank_name}`
-- `GET /api/banks/{bank_name}/files`
-- `GET /api/banks/{bank_name}/files/content?path=...`
-- `PUT /api/banks/{bank_name}/metadata`
-- `PUT /api/banks/{bank_name}/files/content`
-- `POST /api/banks/{bank_name}/reingest`
+- `GET /api/banks/{bank_name}/tree`
 - `POST /api/banks/{bank_name}/edit/propose`
 - `POST /api/banks/{bank_name}/edit/{proposal_id}/apply`
 - `POST /api/banks/{bank_name}/edit/{proposal_id}/reject`
