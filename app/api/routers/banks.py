@@ -10,6 +10,7 @@ from app.db.deps import get_db_session
 from app.db.session import get_sessionmaker
 from app.db.models import ResumeNode
 from app.resume_tree.service import ResumeTreeService
+from app.resume_tree.hierarchy_inference import infer_nodes
 from app.tasks.task_progress import TASKS
 
 router = APIRouter(prefix="/api/banks", tags=["banks"])
@@ -173,32 +174,14 @@ async def api_list_bank_items(bank_name: str, session: AsyncSession = Depends(ge
             .order_by(ResumeNode.parent_id.nullsfirst(), ResumeNode.order_index, ResumeNode.created_at)
         )
     ).scalars().all()
-    by_id = {n.id: n for n in nodes}
-
-    def _nearest_section(n: ResumeNode) -> ResumeNode | None:
-        cur = n
-        seen: set[object] = set()
-        while cur.parent_id is not None and cur.parent_id not in seen:
-            seen.add(cur.parent_id)
-            p = by_id.get(cur.parent_id)
-            if p is None:
-                return None
-            if p.node_type == "section":
-                return p
-            cur = p
-        return None
+    inferred = infer_nodes(nodes)
 
     items: list[dict] = []
     for n in nodes:
-        if n.node_type not in {"detail", "bullet", "experience", "project", "summary", "capability", "skill_group", "reusable_block"}:
+        view = inferred.get(n.id)
+        if view is None or not view.searchable:
             continue
-        if n.node_type == "detail" and not (n.metadata_ or {}).get("searchable", False):
-            continue
-
-        sec = _nearest_section(n)
-        sec_name = ""
-        if sec is not None:
-            sec_name = str((sec.content or {}).get("section_name") or sec.title or "")
+        sec_name = view.section_label
 
         md = n.metadata_ or {}
         tools = md.get("tools") if isinstance(md, dict) else None
@@ -211,7 +194,7 @@ async def api_list_bank_items(bank_name: str, session: AsyncSession = Depends(ge
         items.append(
             BankItemSummary(
                 id=str(n.id),
-                type=_map_section_to_item_type(sec_name) if sec_name else n.node_type,
+                type=_map_section_to_item_type(sec_name) if sec_name else "capability",
                 title=title,
                 tools=[str(t).strip() for t in (tools or []) if str(t).strip()] if isinstance(tools, list) else [],
             ).model_dump()

@@ -43,6 +43,10 @@ class ResumeTreeService:
         if order_index is None:
             order_index = await self._next_order_index(parent_id=parent.id)
 
+        md = (node_data.metadata or {})
+        if not isinstance(md, dict):
+            raise InvalidOperationError("metadata must be a dict when provided")
+
         node = ResumeNode(
             resume_id=parent.resume_id,
             parent_id=parent.id,
@@ -50,7 +54,7 @@ class ResumeTreeService:
             title=node_data.title,
             content=node_data.content,
             order_index=order_index,
-            metadata_=(node_data.metadata or {}),
+            metadata_=md,
         )
         self._session.add(node)
         await self._session.commit()
@@ -76,6 +80,8 @@ class ResumeTreeService:
         if patch.order_index is not None:
             values["order_index"] = patch.order_index
         if patch.metadata is not None:
+            if not isinstance(patch.metadata, dict):
+                raise InvalidOperationError("metadata must be a dict when provided")
             values["metadata_"] = patch.metadata
 
         if not values:

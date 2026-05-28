@@ -51,7 +51,15 @@ async def test_insert_searchable_node_indexes_qdrant(db_session):
     resume_id, root_id = await _make_resume_with_root(db_session, slug="r1")
     svc = ResumeTreeService(db_session, semantic_index=index)
 
-    node = await svc.insert_node(root_id, NodeCreate(node_type="experience", title="Acme", content={"t": "x"}))
+    node = await svc.insert_node(
+        root_id,
+        NodeCreate(
+            node_type="detail",
+            title="Did X",
+            content={"text": "Did X"},
+            metadata={"searchable": True, "source_text": "Did X", "section_label": "experience", "inferred_semantic_role": "experience_detail"},
+        ),
+    )
 
     f = Filter(must=[FieldCondition(key="resume_id", match=MatchValue(value=str(resume_id)))])
     res = client.count(collection_name=cfg.collection, count_filter=f, exact=True)
@@ -70,8 +78,16 @@ async def test_update_node_reindexes_qdrant(db_session):
     _, root_id = await _make_resume_with_root(db_session, slug="r2")
     svc = ResumeTreeService(db_session, semantic_index=index)
 
-    node = await svc.insert_node(root_id, NodeCreate(node_type="project", title="Old", content={"t": "x"}))
-    await svc.update_node(node.id, NodePatch(title="New"))
+    node = await svc.insert_node(
+        root_id,
+        NodeCreate(
+            node_type="detail",
+            title="Old",
+            content={"t": "x"},
+            metadata={"searchable": True, "source_text": "Old"},
+        ),
+    )
+    await svc.update_node(node.id, NodePatch(title="New", metadata={"searchable": True, "source_text": "New"}))
 
     pts = client.retrieve(collection_name=cfg.collection, ids=[str(node.id)], with_payload=True)
     assert (pts[0].payload or {}).get("title") == "New"
@@ -86,8 +102,11 @@ async def test_delete_subtree_deletes_qdrant_points(db_session):
     resume_id, root_id = await _make_resume_with_root(db_session, slug="r3")
     svc = ResumeTreeService(db_session, semantic_index=index)
 
-    parent = await svc.insert_node(root_id, NodeCreate(node_type="experience", title="E1"))
-    child = await svc.insert_node(parent.id, NodeCreate(node_type="bullet", content={"text": "did x"}))
+    parent = await svc.insert_node(root_id, NodeCreate(node_type="item", title="E1"))
+    child = await svc.insert_node(
+        parent.id,
+        NodeCreate(node_type="detail", content={"text": "did x"}, metadata={"searchable": True, "source_text": "did x"}),
+    )
 
     await svc.delete_subtree(parent.id)
 
@@ -106,14 +125,19 @@ async def test_retrieval_returns_node_ids_and_is_scoped_to_resume(db_session):
     resume2_id, root2_id = await _make_resume_with_root(db_session, slug="r4b")
 
     svc1 = ResumeTreeService(db_session, semantic_index=index)
-    n1 = await svc1.insert_node(root1_id, NodeCreate(node_type="summary", title="S", content={"text": "python"}))
+    n1 = await svc1.insert_node(
+        root1_id,
+        NodeCreate(node_type="detail", title="S", content={"text": "python"}, metadata={"searchable": True, "source_text": "python"}),
+    )
 
     svc2 = ResumeTreeService(db_session, semantic_index=index)
-    n2 = await svc2.insert_node(root2_id, NodeCreate(node_type="summary", title="Other", content={"text": "k8s"}))
+    n2 = await svc2.insert_node(
+        root2_id,
+        NodeCreate(node_type="detail", title="Other", content={"text": "k8s"}, metadata={"searchable": True, "source_text": "k8s"}),
+    )
 
     out = await retrieve_relevant_nodes_for_jd(session=db_session, index=index, resume_id=resume1_id, jd_text="python", top_k=5)
     matched = set(out["matched_node_ids"])
     assert str(n1.id) in matched
     assert str(n2.id) not in matched
     assert out["tree"]["resume_id"] == str(resume1_id)
-

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Resume, ResumeNode
 from app.parser import parse_latex_resume
+from app.resume_tree.hierarchy_inference import canonical_section_label
 
 
 def slugify_bank_name(name: str) -> str:
@@ -57,7 +58,12 @@ class BanksService:
         resume = Resume(
             slug=slug,
             title=bank_name.strip() or slug,
-            metadata_={"source_format": source_format},
+            metadata_={
+                "source_format": source_format,
+                # Phase 5: persist source resume inside Postgres (no local experience_bank dependency).
+                "source_resume_tex": resume_text if source_format != "text" else "",
+                "source_resume_text": resume_text if source_format == "text" else "",
+            },
         )
         self._session.add(resume)
         await self._session.commit()
@@ -72,11 +78,14 @@ class BanksService:
             order_index=0,
             metadata_={
                 "searchable": False,
+                "section_label": "root",
+                "inferred_semantic_role": "resume_root",
                 "immutable_fields": {},
                 "source_text": "",
                 "source_section": "",
                 "evidence_ids": [],
                 "tools": [],
+                "skills": [],
                 "metrics": {},
             },
         )
@@ -89,6 +98,7 @@ class BanksService:
 
         section_nodes: dict[str, ResumeNode] = {}
         for i, sec in enumerate(parsed.sections):
+            sec_label = canonical_section_label(sec.name.value if hasattr(sec, "name") else sec.title_raw)
             sec_node = ResumeNode(
                 resume_id=resume.id,
                 parent_id=root.id,
@@ -98,11 +108,14 @@ class BanksService:
                 order_index=i,
                 metadata_={
                     "searchable": False,
+                    "section_label": sec_label,
+                    "inferred_semantic_role": "section",
                     "immutable_fields": {"span_start": sec.span_start, "span_end": sec.span_end},
                     "source_text": sec.raw_text,
                     "source_section": sec.name.value,
                     "evidence_ids": [],
                     "tools": parsed.extracted_tools,
+                    "skills": parsed.extracted_skills,
                     "metrics": {},
                 },
             )
@@ -120,11 +133,14 @@ class BanksService:
                     order_index=j,
                     metadata_={
                         "searchable": False,
+                        "section_label": sec_label,
+                        "inferred_semantic_role": f"{sec_label}_item" if sec_label != "other" else "item",
                         "immutable_fields": {"bullet_id": b.id},
                         "source_text": b.plain,
                         "source_section": sec.name.value,
                         "evidence_ids": [],
                         "tools": parsed.extracted_tools,
+                        "skills": parsed.extracted_skills,
                         "metrics": {},
                     },
                 )
@@ -140,17 +156,21 @@ class BanksService:
                     order_index=0,
                     metadata_={
                         "searchable": True,
+                        "section_label": sec_label,
+                        "inferred_semantic_role": f"{sec_label}_detail" if sec_label != "other" else "detail",
                         "immutable_fields": {"span_start": b.span_start, "span_end": b.span_end, "bullet_id": b.id},
                         "source_text": b.plain,
                         "source_section": sec.name.value,
                         "evidence_ids": [],
                         "tools": parsed.extracted_tools,
+                        "skills": parsed.extracted_skills,
                         "metrics": {},
                     },
                 )
                 self._session.add(detail)
 
         await self._session.commit()
+
         return CreateBankResult(resume_id=resume.id, slug=resume.slug, root_id=root.id)
 
     async def ensure_root_exists(self, resume_id: uuid.UUID) -> ResumeNode:
@@ -162,4 +182,3 @@ class BanksService:
         if root is not None:
             return root
         raise RuntimeError("Resume is missing root node")
-

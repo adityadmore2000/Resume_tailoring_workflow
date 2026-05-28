@@ -13,17 +13,6 @@ from app.db.models import ResumeNode
 from app.rag.qdrant_store import QdrantConfig, ensure_collection, get_client, upsert_points
 
 
-SEARCHABLE_NODE_TYPES: set[str] = {
-    "bullet",
-    "summary",
-    "project",
-    "experience",
-    "skill_group",
-    "capability",
-    "reusable_block",
-}
-
-
 def nodes_collection_name() -> str:
     v = (os.environ.get("QDRANT_RESUME_NODES_COLLECTION") or "").strip()
     if v:
@@ -47,13 +36,25 @@ class QdrantResumeNodesIndex:
     def embed(self, text: str) -> list[float]:
         return self._llm.embed_text(text)
 
-    def _is_searchable(self, node: ResumeNode) -> bool:
-        if node.node_type not in SEARCHABLE_NODE_TYPES:
-            return False
+    def index_decision(self, node: ResumeNode) -> tuple[bool, list[str]]:
+        """
+        Hierarchy-first rule: node_type is structural; metadata carries meaning.
+
+        Index ONLY nodes that explicitly opt-in via `metadata.searchable=true` AND have meaningful text.
+        """
         md = node.metadata_ or {}
-        if isinstance(md, dict) and md.get("searchable") is False:
-            return False
-        return True
+        if not isinstance(md, dict):
+            return False, ["metadata is not a dict"]
+        if md.get("searchable") is not True:
+            return False, ["metadata.searchable is not true"]
+        src = md.get("source_text")
+        if not isinstance(src, str) or not src.strip():
+            return False, ["metadata.source_text is empty"]
+        return True, []
+
+    def _is_searchable(self, node: ResumeNode) -> bool:
+        ok, _reasons = self.index_decision(node)
+        return ok
 
     def _semantic_text(self, node: ResumeNode) -> str:
         md = node.metadata_ or {}
@@ -76,12 +77,23 @@ class QdrantResumeNodesIndex:
         tools = md.get("tools") if isinstance(md, dict) else None
         skills = md.get("skills") if isinstance(md, dict) else None
         evidence_ids = md.get("evidence_ids") if isinstance(md, dict) else None
+        section_label = md.get("section_label") if isinstance(md, dict) else None
+        semantic_role = md.get("semantic_role") if isinstance(md, dict) else None
+        inferred_semantic_role = md.get("inferred_semantic_role") if isinstance(md, dict) else None
+        searchable = md.get("searchable") if isinstance(md, dict) else None
         return {
             "node_id": str(node.id),
             "resume_id": str(node.resume_id),
             "parent_id": str(node.parent_id) if node.parent_id is not None else None,
             "node_type": node.node_type,
+            "section_label": str(section_label).strip() if isinstance(section_label, str) and section_label.strip() else "",
+            "inferred_semantic_role": (
+                str(inferred_semantic_role).strip()
+                if isinstance(inferred_semantic_role, str) and inferred_semantic_role.strip()
+                else (str(semantic_role).strip() if isinstance(semantic_role, str) and semantic_role.strip() else "")
+            ),
             "title": node.title,
+            "searchable": bool(searchable is True),
             "tags": tags if isinstance(tags, list) else [],
             "tools": tools if isinstance(tools, list) else [],
             "skills": skills if isinstance(skills, list) else [],
