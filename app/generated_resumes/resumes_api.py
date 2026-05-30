@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,7 +31,9 @@ class ResumeLatexResponse:
 def _safe_paths_for_resume_id(resume_id: str, *, data_root: Path | None = None) -> GeneratedResumePaths:
     """
     Resolve a resume_id to its on-disk folder.
-    We search under `data/generated_resumes/*/<resume_id>/` to avoid trusting any client-provided bank_folder_name.
+
+    We search under `data/generated_resumes/*/<resume_id>/` to avoid trusting any
+    client-provided bank_folder_name.
     """
     data_root = data_root or Path(DEFAULT_CONFIG.data_root)
     root = (data_root / "generated_resumes").resolve()
@@ -45,7 +46,6 @@ def _safe_paths_for_resume_id(resume_id: str, *, data_root: Path | None = None) 
             continue
         candidate = (bank_dir / resume_id).resolve()
         if candidate.exists() and candidate.is_dir():
-            # Derive bank name from directory; validate using shared rules.
             return get_generated_resume_paths(bank_folder_name=bank_dir.name, resume_id=resume_id, data_root=data_root)
     raise ResumeAPIError("resume_id not found.")
 
@@ -112,3 +112,4 @@ def get_text(resume_id: str, *, data_root: Path | None = None) -> dict:
 def get_traceability(resume_id: str, *, data_root: Path | None = None) -> dict:
     paths = _safe_paths_for_resume_id(resume_id, data_root=data_root)
     return {"resume_id": paths.resume_id, "traceability": read_traceability(paths)}
+
