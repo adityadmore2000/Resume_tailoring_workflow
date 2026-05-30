@@ -1,100 +1,178 @@
 # resume-tailor-backend
 
-FastAPI backend for Resume Tailor (Postgres resume tree + Qdrant resume_nodes retrieval + LaTeX/PDF artifacts). This repo exposes a REST API consumed by the Next.js frontend.
+FastAPI backend for the Resume Tailor system. Handles experience bank creation, evidence-grounded resume tailoring, LaTeX compilation, and PDF artifact management. Exposes a REST API consumed by the Next.js frontend.
 
-## Setup (local)
-1. Create a venv and install dependencies:
-   - `python3 -m venv .venv`
-   - `source .venv/bin/activate`
-   - `python -m pip install -r requirements.txt`
-2. Configure environment:
-   - Set environment variables (or create a local `.env`)
-   - The backend auto-loads `.env` on startup (OS environment variables still take precedence).
-   - Required:
-     - `DATABASE_URL` (Postgres)
-     - `QDRANT_URL` (Qdrant)
-   - For Postgres runtime, either run migrations once with `alembic upgrade head` or set `AUTO_MIGRATE=true`.
-3. Run the API:
-   - `uvicorn app.main:app --reload --port 8000`
+---
 
-Backend URL: `http://localhost:8000`
+## Quick Start (Local)
 
-## Environment variables
-- `FRONTEND_URL` (CORS allowlist origin, e.g. `http://localhost:3000`)
-- `DATABASE_URL` (**required**, Postgres DSN)
-- `QDRANT_URL` (**required**, e.g. `http://localhost:6333`)
-- `QDRANT_COLLECTION` (base name, default `resume_tailor_chunks`; resume_nodes collection is derived as `<base>_resume_nodes`)
-- `QDRANT_RESUME_NODES_COLLECTION` (optional explicit override for the resume_nodes collection name)
-- `LLM_PROVIDER` (`ollama` | `openai` | `openai_compatible`)
-- `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_EMBED_MODEL` (when `LLM_PROVIDER=ollama`)
-- `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_EMBED_MODEL` (when `LLM_PROVIDER=openai`)
-- `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_MODEL`, `OPENAI_COMPATIBLE_EMBED_MODEL` (when `LLM_PROVIDER=openai_compatible`)
+### 1. Install dependencies
 
-Security note: API keys are read from backend environment variables only. Do not expose keys to the frontend.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-## API overview
-Health:
-- `GET /api/health`
+### 2. Configure environment
 
-Banks (Postgres-backed):
-- `GET /api/banks`
-- `POST /api/banks`
-- `GET /api/banks/{bank_name}`
-- `GET /api/banks/{bank_name}/tree`
-- `GET /api/banks/{bank_name}/items`
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
 
-Tailoring:
-- `POST /api/tailor`
+The backend auto-loads `.env` on startup. OS environment variables take precedence over `.env` values.
 
-Tasks:
-- `GET /api/tasks/{task_id}/progress`
+### 3. Run database migrations
 
-Settings:
-- `GET /api/settings`
-- `PUT /api/settings` (currently returns restart-required)
-- `POST /api/settings/test-llm`
-- `POST /api/settings/test-embeddings`
+```bash
+alembic upgrade head
+# Or set AUTO_MIGRATE=true in .env to run migrations automatically on startup
+```
 
-Generated resumes:
-- `GET /api/resumes/{resume_id}`
-- `GET /api/resumes/{resume_id}/latex`
-- `PUT /api/resumes/{resume_id}/latex`
-- `POST /api/resumes/{resume_id}/compile`
-- `GET /api/resumes/{resume_id}/pdf`
-- `GET /api/resumes/{resume_id}/export/pdf`
-- `GET /api/resumes/{resume_id}/markdown`
-- `GET /api/resumes/{resume_id}/text`
-- `GET /api/resumes/{resume_id}/traceability`
+### 4. Start the server
 
-Docs:
-- `GET /api/docs`
-- `GET /api/docs/{slug}`
+```bash
+uvicorn app.main:app --reload --port 8000
+```
 
-## Qdrant setup
-Start Qdrant locally:
-- `docker run -p 6333:6333 qdrant/qdrant:latest`
+Backend available at: `http://localhost:8000`
+Interactive API docs: `http://localhost:8000/api/docs`
 
-Qdrant is required at runtime. The backend validates Qdrant connectivity at startup and will fail fast with a clear error if Qdrant is unreachable.
+---
 
-## LaTeX compiler setup
-For `POST /api/resumes/{resume_id}/compile` and PDF endpoints you need one of:
-- `latexmk` (preferred)
+## External Dependencies
+
+### Qdrant (required)
+
+Qdrant is the vector store used for semantic retrieval. It must be running before the backend starts — the backend validates connectivity at startup and fails fast with a clear error if Qdrant is unreachable.
+
+```bash
+docker run -p 6333:6333 qdrant/qdrant:latest
+```
+
+### LLM Provider (required for tailoring)
+
+The backend supports three LLM provider modes configured via `LLM_PROVIDER`:
+
+**Ollama (default, local):**
+```bash
+ollama pull llama3.2:3b   # default model; works on modest GPUs
+ollama serve              # if not already running
+```
+
+**OpenAI or OpenAI-compatible:** set the relevant `OPENAI_*` or `OPENAI_COMPATIBLE_*` variables (see Environment Variables below).
+
+### LaTeX Compiler (optional)
+
+Required for `POST /api/resumes/{resume_id}/compile` and PDF endpoints. Without it, `.tex`, `.md`, and `.txt` artifacts are still generated — only compilation and PDF export fail.
+
+Install one of:
+- `latexmk` (preferred — handles multi-pass compilation automatically)
 - `pdflatex` (fallback)
 
-Without a LaTeX compiler, the backend still generates `.tex`/`.md`/`.txt` artifacts, but compilation/PDF endpoints will fail.
+---
 
-## Docker (backend + frontend + Qdrant + Ollama)
-If you have the frontend repo checked out next to this repo:
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `FRONTEND_URL` | CORS allowlist origin (e.g. `http://localhost:3000`) |
+| `VECTOR_STORE_BACKEND` | Default `qdrant` — the only supported runtime backend |
+| `QDRANT_URL` | **Required** (e.g. `http://localhost:6333`) |
+| `QDRANT_COLLECTION` | Default `resume_tailor_chunks` |
+| `LLM_PROVIDER` | `ollama` \| `openai` \| `openai_compatible` |
+| `OLLAMA_HOST` | Ollama server URL (when `LLM_PROVIDER=ollama`) |
+| `OLLAMA_MODEL` | Model name for generation (default `llama3.2:3b`) |
+| `OLLAMA_EMBED_MODEL` | Model name for embeddings |
+| `OPENAI_API_KEY` | (when `LLM_PROVIDER=openai`) |
+| `OPENAI_BASE_URL` | OpenAI base URL override |
+| `OPENAI_MODEL` | Model name for generation |
+| `OPENAI_EMBED_MODEL` | Model name for embeddings |
+| `OPENAI_COMPATIBLE_BASE_URL` | (when `LLM_PROVIDER=openai_compatible`) |
+| `OPENAI_COMPATIBLE_API_KEY` | API key for compatible endpoint |
+| `OPENAI_COMPATIBLE_MODEL` | Model name for generation |
+| `OPENAI_COMPATIBLE_EMBED_MODEL` | Model name for embeddings |
+
+**Security note:** API keys are read from backend environment variables only and are never forwarded to or exposed by the frontend.
+
+---
+
+## API Overview
+
+### Health
+- `GET /api/health`
+
+### Experience Banks
+- `GET /api/banks` — list all registered banks
+- `POST /api/banks` — create a new bank (upload master resume)
+- `GET /api/banks/{bank_name}` — bank metadata
+- `GET /api/banks/{bank_name}/tree` — full resume node tree for the bank
+- `POST /api/banks/{bank_name}/edit/propose` — propose an edit to a tree node
+- `POST /api/banks/{bank_name}/edit/{proposal_id}/apply` — apply a proposed edit
+- `POST /api/banks/{bank_name}/edit/{proposal_id}/reject` — reject a proposed edit
+- `GET /api/banks/{bank_name}/edit/history` — edit history for the bank
+
+### Tailoring
+- `POST /api/tailor` — run a tailoring job against an existing bank
+
+### Tasks
+- `GET /api/tasks/{task_id}/progress` — check progress of a long-running background task
+
+### Settings
+- `GET /api/settings`
+- `PUT /api/settings` (currently returns restart-required)
+- `POST /api/settings/test-llm` — verify LLM connectivity
+- `POST /api/settings/test-embeddings` — verify embedding model connectivity
+
+### Generated Resumes
+- `GET /api/resumes/{resume_id}` — artifact metadata
+- `GET /api/resumes/{resume_id}/latex` — current LaTeX source
+- `PUT /api/resumes/{resume_id}/latex` — save edited LaTeX
+- `POST /api/resumes/{resume_id}/compile` — compile LaTeX to PDF
+- `GET /api/resumes/{resume_id}/pdf` — stream the compiled PDF
+- `GET /api/resumes/{resume_id}/export/pdf` — download the compiled PDF
+- `GET /api/resumes/{resume_id}/markdown` — Markdown version
+- `GET /api/resumes/{resume_id}/text` — plain text version
+- `GET /api/resumes/{resume_id}/traceability` — bullet → evidence traceability
+
+### Docs
+- `GET /api/docs` — docs index
+- `GET /api/docs/{slug}` — rendered doc page
+
+---
+
+## Docker (Full Stack)
+
+With `resume-tailor-backend` and `resume-tailor-frontend` checked out as siblings:
+
 ```
 ../resume-tailor-backend
 ../resume-tailor-frontend
 ```
 
-Run everything:
-- `docker compose up --build`
+```bash
+docker compose up --build
+```
 
-Services:
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8000`
-- Qdrant: `http://localhost:6333`
-- Ollama: `http://localhost:11434`
+This starts four services:
+
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:3000` |
+| Backend | `http://localhost:8000` |
+| Qdrant | `http://localhost:6333` |
+| Ollama | `http://localhost:11434` |
+
+---
+
+## Architecture Notes
+
+See [`docs/SYSTEM_DESIGN_CLAUDE.md`](docs/SYSTEM_DESIGN_CLAUDE.md) for the full architectural rationale and [`docs/TECHNICAL_DOCUMENTATION_CLAUDE.md`](docs/TECHNICAL_DOCUMENTATION_CLAUDE.md) for module-level details and extension guides.
+
+Key points:
+
+- **Experience banks are the source of truth.** Tailoring never reads the original uploaded resume — it reads only from the bank created during Phase 1.
+- **Assembly is deterministic.** The LLM is used only for JD parsing. All resume assembly, evidence verification, and LaTeX construction is done in Python.
+- **Qdrant is a retrieval index, not storage.** Structured resume data lives in Postgres; Qdrant holds embeddings and `node_id` payloads for semantic search.
+- **Compilation is safe.** A preflight validator checks LaTeX structural integrity before every compile. Errors never clear the editor or delete the last successful PDF.
