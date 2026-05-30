@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 
-from app.config import DEFAULT_CONFIG
+from app.config import AppConfig
 from app.db.session import get_sessionmaker
 from app.db.models import Resume, ResumeNode
 from app.generated_resumes.latex_compiler import LatexCompileError, compile_resume_latex
@@ -42,7 +42,7 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
     if not jd_text.strip():
         raise TailorError("jd_text is required")
 
-    cfg = DEFAULT_CONFIG
+    cfg = AppConfig.from_env()
     llm = build_llm_provider(cfg)
 
     qurl = (cfg.qdrant_url or "").strip()

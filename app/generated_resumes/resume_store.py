@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.bank_generator.folder_manager import BankFolderError, get_bank_paths, safe_join
 from app.config import DEFAULT_CONFIG
 
 
@@ -16,6 +15,7 @@ class ResumeStoreError(ValueError):
 
 
 _RESUME_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+_BANK_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
 def _now_iso() -> str:
@@ -33,6 +33,25 @@ def validate_resume_id(resume_id: str) -> None:
         raise ResumeStoreError("resume_id contains invalid path characters.")
     if not _RESUME_ID_RE.match(resume_id):
         raise ResumeStoreError("resume_id must be a 32-char lowercase hex string.")
+
+
+def _validate_bank_folder_name(bank_folder_name: str) -> str:
+    slug = (bank_folder_name or "").strip().casefold()
+    if not slug:
+        raise ResumeStoreError("bank_folder_name is empty.")
+    if ".." in slug or "/" in slug or "\\" in slug:
+        raise ResumeStoreError("bank_folder_name contains invalid path characters.")
+    if not _BANK_SLUG_RE.match(slug):
+        raise ResumeStoreError("bank_folder_name must match: lowercase letters, numbers, hyphens, underscores.")
+    return slug
+
+
+def _safe_join(root: Path, *parts: str) -> Path:
+    candidate = (root / Path(*parts)).resolve()
+    root_resolved = root.resolve()
+    if root_resolved not in candidate.parents and candidate != root_resolved:
+        raise ResumeStoreError("Path traversal detected.")
+    return candidate
 
 
 @dataclass(frozen=True)
@@ -56,14 +75,13 @@ def get_generated_resume_paths(
     data_root: Path | None = None,
 ) -> GeneratedResumePaths:
     data_root = data_root or Path(DEFAULT_CONFIG.data_root)
-    # Reuse bank folder validation/slugify rules (prevents traversal).
-    paths = get_bank_paths(data_root, bank_folder_name)
+    slug = _validate_bank_folder_name(bank_folder_name)
     validate_resume_id(resume_id)
 
     root = data_root / "generated_resumes"
-    resume_dir = safe_join(root, paths.bank_folder_name, resume_id)
+    resume_dir = _safe_join(root, slug, resume_id)
     return GeneratedResumePaths(
-        bank_folder_name=paths.bank_folder_name,
+        bank_folder_name=slug,
         resume_id=resume_id,
         resume_dir=resume_dir,
         latex_path=resume_dir / "resume.tex",

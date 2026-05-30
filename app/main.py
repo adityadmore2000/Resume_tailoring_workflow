@@ -5,13 +5,14 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import AppConfig, DEFAULT_CONFIG
+from app.config import AppConfig
 from app.api.routers import banks, docs, health, resumes, tailor, tasks, settings, retrieve_debug
 from app.db.migrate import upgrade_head
-from app.rag.qdrant_store import QdrantConfig, get_client, healthcheck
+from app.qdrant import QdrantConfig, get_client, healthcheck
 
 
-def create_app(cfg: AppConfig = DEFAULT_CONFIG) -> FastAPI:
+def create_app(cfg: AppConfig | None = None) -> FastAPI:
+    cfg = cfg or AppConfig.from_env()
     app = FastAPI(title="Resume Tailor Backend", version="1.0")
 
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
@@ -44,9 +45,8 @@ def create_app(cfg: AppConfig = DEFAULT_CONFIG) -> FastAPI:
         qdrant_url = (cfg.qdrant_url or "").strip()
         if not qdrant_url:
             raise RuntimeError("Qdrant is required. Set QDRANT_URL before starting the backend.")
-        qc = QdrantConfig(url=qdrant_url, collection=cfg.qdrant_collection)
         try:
-            client = get_client(qc)
+            client = get_client(QdrantConfig(url=qdrant_url))
             healthcheck(client=client)
         except Exception as e:
             raise RuntimeError(f"Qdrant is unreachable at QDRANT_URL='{qdrant_url}'. Error: {e}") from e

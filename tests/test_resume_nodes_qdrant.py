@@ -7,7 +7,7 @@ from qdrant_client.http.models import FieldCondition, Filter, MatchValue
 from sqlalchemy import select
 
 from app.db.models import Resume, ResumeNode
-from app.rag.qdrant_store import QdrantConfig, get_client
+from app.qdrant import QdrantConfig, get_client
 from app.resume_tree.qdrant_index import QdrantResumeNodesIndex, ResumeNodesIndexConfig
 from app.resume_tree.semantic_search import retrieve_relevant_nodes_for_jd
 from app.resume_tree.service import NodeCreate, NodePatch, ResumeTreeService
@@ -46,7 +46,7 @@ async def _make_resume_with_root(db_session, *, slug: str) -> tuple[uuid.UUID, u
 async def test_insert_searchable_node_indexes_qdrant(db_session):
     cfg = ResumeNodesIndexConfig(url=":memory:", collection="nodes_idx_1")
     index = QdrantResumeNodesIndex(cfg=cfg, llm=DummyLLM(dim=8))
-    client = get_client(QdrantConfig(url=cfg.url, collection=cfg.collection))
+    client = get_client(QdrantConfig(url=cfg.url))
 
     resume_id, root_id = await _make_resume_with_root(db_session, slug="r1")
     svc = ResumeTreeService(db_session, semantic_index=index)
@@ -73,7 +73,7 @@ async def test_insert_searchable_node_indexes_qdrant(db_session):
 async def test_update_node_reindexes_qdrant(db_session):
     cfg = ResumeNodesIndexConfig(url=":memory:", collection="nodes_idx_2")
     index = QdrantResumeNodesIndex(cfg=cfg, llm=DummyLLM(dim=8))
-    client = get_client(QdrantConfig(url=cfg.url, collection=cfg.collection))
+    client = get_client(QdrantConfig(url=cfg.url))
 
     _, root_id = await _make_resume_with_root(db_session, slug="r2")
     svc = ResumeTreeService(db_session, semantic_index=index)
@@ -97,7 +97,7 @@ async def test_update_node_reindexes_qdrant(db_session):
 async def test_delete_subtree_deletes_qdrant_points(db_session):
     cfg = ResumeNodesIndexConfig(url=":memory:", collection="nodes_idx_3")
     index = QdrantResumeNodesIndex(cfg=cfg, llm=DummyLLM(dim=8))
-    client = get_client(QdrantConfig(url=cfg.url, collection=cfg.collection))
+    client = get_client(QdrantConfig(url=cfg.url))
 
     resume_id, root_id = await _make_resume_with_root(db_session, slug="r3")
     svc = ResumeTreeService(db_session, semantic_index=index)
