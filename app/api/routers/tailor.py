@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.services.tailor_service import TailorError, tailor_resume_from_bank
 import uuid
 
+from app.api.services.tailor_service import TailorError, tailor_resume_from_bank_async
 from app.banks_pg.service import BanksService, slugify_bank_name
 from app.db.deps import get_db_session
 from app.db.models import Resume
@@ -75,13 +75,17 @@ async def api_tailor(
             ],
         )
 
-        def _run() -> None:
+        async def _run_async() -> None:
             try:
-                tailor_resume_from_bank(bank_folder_name=slug, jd_text=body.jd_text, task_id=progress.task_id)
+                await tailor_resume_from_bank_async(
+                    bank_folder_name=slug,
+                    jd_text=body.jd_text,
+                    task_id=progress.task_id,
+                )
             except Exception as e:
                 TASKS.fail(task_id=progress.task_id, step_id=progress.current_step, error=str(e))
 
-        background_tasks.add_task(_run)
+        background_tasks.add_task(_run_async)
         return TailorResponse(bank_folder_name=slug, task_id=progress.task_id, status="running")
     except TailorError as e:
         raise HTTPException(status_code=400, detail=str(e))
