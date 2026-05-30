@@ -76,6 +76,15 @@ def test_app_import_does_not_require_streamlit(monkeypatch):
     assert callable(main_mod.create_app)
 
 
+def test_tailor_router_uses_async_entrypoint_and_no_asyncio_run():
+    import app.api.routers.tailor as tailor_router_mod
+
+    src = inspect.getsource(tailor_router_mod.api_tailor)
+    assert "tailor_resume_from_bank_async" in src
+    assert "tailor_resume_from_bank(" not in src
+    assert "asyncio.run" not in src
+
+
 @pytest.mark.asyncio
 async def test_runtime_works_without_data_experience_bank(db_session, tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)

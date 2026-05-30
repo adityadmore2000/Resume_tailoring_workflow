@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 
 from app.config import AppConfig
 from app.db.session import get_sessionmaker
@@ -15,6 +17,8 @@ from app.rewriter import rewrite_bullet
 from app.verifier import latex_to_plain_for_checks, verify_bullet_rewrite
 from app.resume_tree.qdrant_index import QdrantResumeNodesIndex, ResumeNodesIndexConfig, nodes_collection_name
 from app.tailoring.hierarchy_context import build_tailoring_context
+from app.resume_tree.render_mapper import resume_nodes_to_renderable
+from app.resume_tree.latex_renderer import escape_latex_text, render_resume_diagnostics, render_resume_to_latex
 from app.tasks.task_progress import TASKS
 
 
@@ -27,6 +31,24 @@ class TailorResult:
     bank_folder_name: str
     resume_id: str
     messages: list[str]
+
+
+def _redact_database_url(url: str | None) -> str:
+    if not url:
+        return ""
+    try:
+        s = urlsplit(url)
+        netloc = s.netloc
+        if "@" in netloc:
+            creds, host = netloc.split("@", 1)
+            if ":" in creds:
+                user, _pw = creds.split(":", 1)
+                netloc = f"{user}:***@{host}"
+            else:
+                netloc = f"{creds}:***@{host}"
+        return urlunsplit((s.scheme, netloc, s.path, s.query, s.fragment))
+    except Exception:
+        return "<invalid DATABASE_URL>"
 
 
 def _apply_replacements(source_tex: str, replacements: list[tuple[int, int, str]]) -> str:
@@ -51,6 +73,10 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
 
     sessionmaker = get_sessionmaker()
     messages: list[str] = []
+    resume_obj: Resume | None = None
+    nodes: list[ResumeNode] = []
+    debug_loaded_resume_id: str | None = None
+    debug_node_count = 0
     async with sessionmaker() as session:
         from sqlalchemy import select
 
@@ -58,12 +84,6 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
         resume_obj = (await session.execute(select(Resume).where(Resume.slug == slug))).scalar_one_or_none()
         if resume_obj is None:
             raise TailorError(f"Resume not found for bank_folder_name='{bank_folder_name}'.")
-
-        source_tex = (resume_obj.metadata_ or {}).get("source_resume_tex") if isinstance(resume_obj.metadata_, dict) else None
-        if not isinstance(source_tex, str) or not source_tex.strip():
-            raise TailorError(
-                "Resume source LaTeX is missing from Postgres metadata. Re-create the bank so `resumes.metadata.source_resume_tex` is populated."
-            )
 
         nodes = (
             await session.execute(
@@ -74,6 +94,8 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
         ).scalars().all()
         if not nodes:
             raise TailorError("Resume has no resume_nodes in Postgres; cannot tailor.")
+        debug_loaded_resume_id = str(resume_obj.id)
+        debug_node_count = len(nodes)
 
     if task_id:
         TASKS.advance(task_id=task_id, step_id="resume_parsed")
@@ -143,7 +165,13 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
 
     jd_keywords = jd_struct.important_keywords + jd_struct.required_skills + jd_struct.preferred_skills
 
-    replacements: list[tuple[int, int, str]] = []
+    # Default path: generate full LaTeX from resume_nodes tree.
+    # Legacy span-patching is kept behind an env flag for temporary back-compat.
+    use_legacy_span_patch = (os.environ.get("LEGACY_TEX_SPAN_PATCH") or "").strip().casefold() in {"1", "true", "yes", "on"}
+    preserve_imported_latex = (os.environ.get("PRESERVE_IMPORTED_LATEX") or "").strip().casefold() in {"1", "true", "yes", "on"}
+    generation_mode = "tree_renderer"
+
+    bullet_overrides: dict[uuid.UUID, str] = {}
     rewrite_debug: list[dict[str, object]] = []
     rewrites_used = 0
     max_rewrites = 18
@@ -157,19 +185,6 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
         if not isinstance(md, dict):
             messages.append(f"Node {n.id} metadata is not a dict; skipped rewrite.")
             continue
-        imm = md.get("immutable_fields")
-        if not isinstance(imm, dict):
-            messages.append(f"Node {n.id} missing metadata.immutable_fields; skipped rewrite.")
-            continue
-        try:
-            span_start = int(imm.get("span_start"))
-            span_end = int(imm.get("span_end"))
-        except Exception:
-            messages.append(f"Node {n.id} missing valid immutable_fields.span_start/span_end; skipped rewrite.")
-            continue
-        if span_start < 0 or span_end <= span_start or span_end > len(source_tex):
-            messages.append(f"Node {n.id} has out-of-range spans ({span_start}, {span_end}); skipped rewrite.")
-            continue
 
         if rewrites_used >= max_rewrites:
             rewrite_debug.append({"node_id": str(n.id), "action": "keep", "reason": "rewrite_limit_reached"})
@@ -180,8 +195,10 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
             content = {}
         original_latex = str(content.get("latex") or "").strip()
         if not original_latex:
-            # Fall back to source slice (still bullet content span)
-            original_latex = source_tex[span_start:span_end].strip()
+            # Fall back to plain text (escaped for LaTeX).
+            src = md.get("source_text")
+            if isinstance(src, str) and src.strip():
+                original_latex = escape_latex_text(src.strip())
         original_plain = str((content.get("plain") or md.get("source_text") or "")).strip()
         if not original_plain:
             original_plain = latex_to_plain_for_checks(original_latex)
@@ -221,11 +238,47 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
             )
             continue
 
-        replacements.append((span_start, span_end, candidate_latex))
+        bullet_overrides[n.id] = candidate_latex
         rewrites_used += 1
-        rewrite_debug.append({"node_id": str(n.id), "action": "rewrite", "span_start": span_start, "span_end": span_end})
+        rewrite_debug.append({"node_id": str(n.id), "action": "rewrite"})
 
-    tailored_tex = _apply_replacements(source_tex, replacements)
+    renderable = resume_nodes_to_renderable(resume=resume_obj, nodes=nodes)  # type: ignore[arg-type]
+    render_diag = render_resume_diagnostics(
+        resume=renderable,
+        bullet_overrides=bullet_overrides,
+        preserve_imported_latex=preserve_imported_latex,
+    )
+    tailored_tex = render_resume_to_latex(
+        resume=renderable,
+        bullet_overrides=bullet_overrides,
+        preserve_imported_latex=preserve_imported_latex,
+    )
+
+    # Legacy: optional span-patching (disabled by default).
+    if use_legacy_span_patch:
+        source_tex = (resume_obj.metadata_ or {}).get("source_resume_tex") if isinstance(resume_obj.metadata_, dict) else None
+        if isinstance(source_tex, str) and source_tex.strip():
+            # Only patch spans when the provenance LaTeX exists.
+            replacements: list[tuple[int, int, str]] = []
+            for nid, new_text in bullet_overrides.items():
+                node = next((x for x in nodes if x.id == nid), None)
+                if node is None:
+                    continue
+                md = node.metadata_ or {}
+                imm = md.get("immutable_fields") if isinstance(md, dict) else None
+                if not isinstance(imm, dict):
+                    continue
+                try:
+                    span_start = int(imm.get("span_start"))
+                    span_end = int(imm.get("span_end"))
+                except Exception:
+                    continue
+                if span_start < 0 or span_end <= span_start or span_end > len(source_tex):
+                    continue
+                replacements.append((span_start, span_end, new_text))
+            if replacements:
+                tailored_tex = _apply_replacements(source_tex, replacements)
+                generation_mode = "legacy_span_patch"
     if task_id:
         TASKS.advance(task_id=task_id, step_id="content_tailored")
 
@@ -238,6 +291,24 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
         markdown=None,
         text=None,
         traceability={
+            "debug": {
+                "database_url": _redact_database_url(os.environ.get("DATABASE_URL")),
+                "loaded_resume_id": debug_loaded_resume_id,
+                "loaded_node_count": debug_node_count,
+                "contains_TEST_TREE_RENDER_NODE_123": any(
+                    isinstance(n.content, dict)
+                    and (
+                        n.content.get("plain") == "TEST_TREE_RENDER_NODE_123"
+                        or n.content.get("latex") == "TEST_TREE_RENDER_NODE_123"
+                    )
+                    for n in nodes
+                ),
+                "use_legacy_span_patch": use_legacy_span_patch,
+                "preserve_imported_latex": preserve_imported_latex,
+                "generation_mode": generation_mode,
+                "used_source_resume_tex": generation_mode == "legacy_span_patch",
+                "render": render_diag,
+            },
             "resume_id": str(resume_obj.id),
             "bank_folder_name": bank_folder_name,
             "matched_node_ids": [str(x) for x in matched_node_ids],
@@ -247,6 +318,8 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
             "messages": list(messages),
         },
     )
+    messages.append(f"generated_resume.latex_path={gen_paths.latex_path}")
+    messages.append(f"generated_resume.pdf_path={gen_paths.pdf_path}")
 
     try:
         compile_resume_latex(paths=gen_paths)
@@ -262,7 +335,10 @@ async def tailor_resume_from_bank_async(*, bank_folder_name: str, jd_text: str, 
 
 def tailor_resume_from_bank(*, bank_folder_name: str, jd_text: str, task_id: str | None = None) -> TailorResult:
     """
-    Sync wrapper for background task runners.
+    Sync wrapper for CLI/sync contexts only.
+
+    FastAPI handlers/background tasks MUST call `tailor_resume_from_bank_async()` directly to avoid
+    cross-event-loop issues with async SQLAlchemy/asyncpg.
     """
     try:
         loop = asyncio.get_running_loop()
