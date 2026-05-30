@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from app.ui.api.resumes_api import (
+from app.generated_resumes.resumes_api import (
     ResumeAPIError,
     compile_latex,
     get_latex,
@@ -107,4 +107,3 @@ def api_get_traceability(resume_id: str):
         return get_traceability(resume_id)
     except ResumeAPIError as e:
         raise HTTPException(status_code=400, detail=str(e))
-

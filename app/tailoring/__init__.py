@@ -1,2 +1,1 @@
-"""Bank-scoped tailoring utilities (uses Experience Bank as source of truth)."""
-
+"""Tailoring utilities backed by Postgres resume_nodes + Qdrant resume_nodes index."""

@@ -10,7 +10,7 @@ from qdrant_client.http.models import FieldCondition, Filter, MatchAny, MatchVal
 
 from app.config import DEFAULT_CONFIG
 from app.db.models import ResumeNode
-from app.rag.qdrant_store import QdrantConfig, ensure_collection, get_client, upsert_points
+from app.qdrant import QdrantConfig, ensure_collection, get_client, upsert_points
 
 
 def nodes_collection_name() -> str:
@@ -18,7 +18,8 @@ def nodes_collection_name() -> str:
     if v:
         return v
     # Keep separate from the chunk collection to avoid schema collisions.
-    return f"{DEFAULT_CONFIG.qdrant_collection}_resume_nodes"
+    base = (os.environ.get("QDRANT_COLLECTION") or "").strip() or DEFAULT_CONFIG.qdrant_collection
+    return f"{base}_resume_nodes"
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,7 @@ class QdrantResumeNodesIndex:
     def __init__(self, *, cfg: ResumeNodesIndexConfig, llm) -> None:
         self._cfg = cfg
         self._llm = llm
-        self._client: QdrantClient = get_client(QdrantConfig(url=cfg.url, collection=cfg.collection))
+        self._client: QdrantClient = get_client(QdrantConfig(url=cfg.url))
 
     def embed(self, text: str) -> list[float]:
         return self._llm.embed_text(text)

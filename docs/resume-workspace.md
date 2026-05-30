@@ -28,5 +28,4 @@ You need a professional review surface to edit output deterministically and expo
 - Editing bullets without checking traceability.
 
 ## Recommended next steps
-- Tailor another role using the same Experience Bank, or refine your bank if evidence is missing.
-
+- Tailor another role using the same bank, or update your master resume and recreate the bank if key evidence is missing.

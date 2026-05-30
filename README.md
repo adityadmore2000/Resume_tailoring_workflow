@@ -1,6 +1,6 @@
 # resume-tailor-backend
 
-FastAPI backend for Resume Tailor (AI/RAG/Experience Banks/LaTeX/PDF). This repo exposes a REST API consumed by the Next.js frontend.
+FastAPI backend for Resume Tailor (Postgres resume tree + Qdrant resume_nodes retrieval + LaTeX/PDF artifacts). This repo exposes a REST API consumed by the Next.js frontend.
 
 ## Setup (local)
 1. Create a venv and install dependencies:
@@ -8,8 +8,11 @@ FastAPI backend for Resume Tailor (AI/RAG/Experience Banks/LaTeX/PDF). This repo
    - `source .venv/bin/activate`
    - `python -m pip install -r requirements.txt`
 2. Configure environment:
-   - `cp .env.example .env` and edit values as needed
+   - Set environment variables (or create a local `.env`)
    - The backend auto-loads `.env` on startup (OS environment variables still take precedence).
+   - Required:
+     - `DATABASE_URL` (Postgres)
+     - `QDRANT_URL` (Qdrant)
    - For Postgres runtime, either run migrations once with `alembic upgrade head` or set `AUTO_MIGRATE=true`.
 3. Run the API:
    - `uvicorn app.main:app --reload --port 8000`
@@ -18,9 +21,10 @@ Backend URL: `http://localhost:8000`
 
 ## Environment variables
 - `FRONTEND_URL` (CORS allowlist origin, e.g. `http://localhost:3000`)
-- `VECTOR_STORE_BACKEND` (default `qdrant`; only supported runtime backend)
+- `DATABASE_URL` (**required**, Postgres DSN)
 - `QDRANT_URL` (**required**, e.g. `http://localhost:6333`)
-- `QDRANT_COLLECTION` (default `resume_tailor_chunks`)
+- `QDRANT_COLLECTION` (base name, default `resume_tailor_chunks`; resume_nodes collection is derived as `<base>_resume_nodes`)
+- `QDRANT_RESUME_NODES_COLLECTION` (optional explicit override for the resume_nodes collection name)
 - `LLM_PROVIDER` (`ollama` | `openai` | `openai_compatible`)
 - `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_EMBED_MODEL` (when `LLM_PROVIDER=ollama`)
 - `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_EMBED_MODEL` (when `LLM_PROVIDER=openai`)
@@ -32,15 +36,12 @@ Security note: API keys are read from backend environment variables only. Do not
 Health:
 - `GET /api/health`
 
-Experience Banks:
+Banks (Postgres-backed):
 - `GET /api/banks`
 - `POST /api/banks`
 - `GET /api/banks/{bank_name}`
 - `GET /api/banks/{bank_name}/tree`
-- `POST /api/banks/{bank_name}/edit/propose`
-- `POST /api/banks/{bank_name}/edit/{proposal_id}/apply`
-- `POST /api/banks/{bank_name}/edit/{proposal_id}/reject`
-- `GET /api/banks/{bank_name}/edit/history`
+- `GET /api/banks/{bank_name}/items`
 
 Tailoring:
 - `POST /api/tailor`
